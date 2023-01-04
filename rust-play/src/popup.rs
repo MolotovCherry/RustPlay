@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 use windows::{
     core::{HSTRING, PCWSTR},
     Win32::UI::{

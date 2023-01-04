@@ -14,8 +14,8 @@
 
 #![allow(non_snake_case, clippy::upper_case_acronyms, non_camel_case_types)]
 
+use super::win_version::{is_win10_1809, is_win11, is_win11_22h2};
 use crate::popup::{display_popup, MessageBoxIcon};
-use crate::win_version::{is_win10_1809, is_win11, is_win11_22h2};
 use std::ffi::c_void;
 
 use windows::Win32::{

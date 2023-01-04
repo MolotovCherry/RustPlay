@@ -28,7 +28,7 @@ use windows::Win32::{
     },
 };
 
-use crate::dwm_win32::apply_acrylic;
+use super::dwm_win32::apply_acrylic;
 
 pub const TITLEBAR_HEIGHT: i32 = 80;
 const WC_DIALOG: u32 = 0x8002;
