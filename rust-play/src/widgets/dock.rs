@@ -28,32 +28,36 @@ pub type Tree = egui_dock::Tree<Tab>;
 #[cfg(target_os = "windows")]
 pub type CoveredRects = SmallVec<[Rect; 10]>;
 
+pub trait TreeTabs {
+    fn init() -> Self;
+}
+
+impl TreeTabs for Tree {
+    fn init() -> Self {
+        let tree = Tree::new(vec![
+            "tab1".to_owned(),
+            "tab2".to_owned(),
+            "tab34444".to_owned(),
+        ]);
+
+        tree
+    }
+}
+
 pub struct Dock<'app> {
     #[cfg(target_os = "windows")]
     tx: &'app Sender<CoveredRects>,
-    tree: Tree,
+    tree: &'app mut Tree,
 }
 
 impl<'app> Dock<'app> {
     #[cfg(target_os = "windows")]
-    pub fn new(tx: &'app Sender<CoveredRects>) -> Self {
-        let tree = Tree::new(vec![
-            "tab1".to_owned(),
-            "tab2".to_owned(),
-            "tab34444".to_owned(),
-        ]);
-
+    pub fn new(tree: &'app mut Tree, tx: &'app Sender<CoveredRects>) -> Self {
         Self { tx, tree }
     }
 
     #[cfg(not(target_os = "windows"))]
-    pub fn new() -> Self {
-        let tree = Tree::new(vec![
-            "tab1".to_owned(),
-            "tab2".to_owned(),
-            "tab34444".to_owned(),
-        ]);
-
+    pub fn new(tree: &'app mut Tree) -> Self {
         Self { tree }
     }
 

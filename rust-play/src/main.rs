@@ -22,7 +22,9 @@ use {
     widgets::dock::CoveredRects,
 };
 
-use widgets::dock::Dock;
+use std::sync::mpsc::Receiver;
+
+use widgets::dock::{Dock, Tree, TreeTabs};
 
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
@@ -45,10 +47,16 @@ fn main() {
     }
 
     #[cfg(target_os = "windows")]
-    let (tx, rx) = channel();
+    let app = {
+        let (app, rx) = RustPlay::new();
 
-    #[cfg(target_os = "windows")]
-    custom_frame::init(rx);
+        custom_frame::init(rx);
+
+        app
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let app = RustPlay::new();
 
     tracing_subscriber::fmt::init();
 
@@ -61,11 +69,7 @@ fn main() {
         ..Default::default()
     };
 
-    eframe::run_native(
-        "Rust Play",
-        options,
-        Box::new(|_cc| Box::new(RustPlay::new(tx))),
-    );
+    eframe::run_native("Rust Play", options, Box::new(|_cc| Box::new(app)));
 }
 
 struct RustPlay {
@@ -73,12 +77,25 @@ struct RustPlay {
     // tab and uncovered titlebar
     #[cfg(target_os = "windows")]
     tx: Sender<CoveredRects>,
+    tree: Tree,
 }
 
 impl RustPlay {
     #[cfg(target_os = "windows")]
-    fn new(sender: Sender<CoveredRects>) -> Self {
-        Self { tx: sender }
+    fn new() -> (Self, Receiver<CoveredRects>) {
+        let (tx, rx) = channel();
+
+        let app = Self {
+            tx,
+            tree: Tree::init(),
+        };
+
+        (app, rx)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn new() -> Self {
+        Self { tree: Tree::init() }
     }
 }
 
@@ -89,6 +106,6 @@ impl eframe::App for RustPlay {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        Dock::new(&self.tx).show(ctx);
+        Dock::new(&mut self.tree, &self.tx).show(ctx);
     }
 }
