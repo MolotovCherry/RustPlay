@@ -18,11 +18,11 @@ default = []
 serde = ["dep:serde", "egui/serde"]
 
 [dependencies]
-egui = "0.20"
-serde = { version = "1", optional = true, features = ["derive"] }
+egui = "0.20.1"
+serde = { version = "1.0.152", optional = true, features = ["derive"] }
 
 [dev-dependencies]
-eframe = "0.20"
+eframe = "0.20.1"
 
 [dependencies.windows]
 version = "0.43.0"

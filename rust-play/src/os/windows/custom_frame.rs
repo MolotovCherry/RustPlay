@@ -173,12 +173,12 @@ unsafe fn custom_subclass_proc(
     match u_msg {
         WM_ACTIVATE => {
             // Extend the frame into the client area.
-            let mut margins = MARGINS::default();
-
-            margins.cxLeftWidth = 0;
-            margins.cxRightWidth = 0;
-            margins.cyBottomHeight = 0;
-            margins.cyTopHeight = TITLEBAR_HEIGHT;
+            let margins = MARGINS {
+                cxLeftWidth: 0,
+                cxRightWidth: 0,
+                cyBottomHeight: 0,
+                cyTopHeight: TITLEBAR_HEIGHT,
+            };
 
             DwmExtendFrameIntoClientArea(hwnd, &margins).expect("Failed to extend frame");
 
@@ -208,10 +208,10 @@ unsafe fn custom_subclass_proc(
 
             // check if it's maximized
             let mut placement = WINDOWPLACEMENT::default();
-            if GetWindowPlacement(hwnd, &mut placement).as_bool() {
-                if placement.showCmd == SW_SHOWMAXIMIZED {
-                    rc_rect.top += padding;
-                }
+            if GetWindowPlacement(hwnd, &mut placement).as_bool()
+                && placement.showCmd == SW_SHOWMAXIMIZED
+            {
+                rc_rect.top += padding;
             }
 
             *f_call_dsp = false;
@@ -239,11 +239,10 @@ unsafe fn custom_subclass_proc(
                 let reader = COVERED_TITLEBAR_AREA.get().unwrap().read();
                 // noteL:: this is in window coords, not screen space coords!
                 let blank_rect = Rect::from_two_pos(Pos2::new(0.0, 0.0), Pos2::new(0.0, 0.0));
-                let collision_rect = reader
+                let collision_rect = *reader
                     .iter()
                     .reduce(|acc, e| if acc.right() < e.right() { acc } else { e })
-                    .unwrap_or(&blank_rect)
-                    .clone();
+                    .unwrap_or(&blank_rect);
 
                 // only allowed to go as far as the latest tab
                 minmaxinfo.ptMinTrackSize.x =
@@ -301,21 +300,22 @@ fn hit_test_nca(hwnd: HWND, _: usize, lparam: isize, uidsubclass: usize) -> isiz
         let covered_area = COVERED_TITLEBAR_AREA.get().unwrap().read();
         for rect in covered_area.iter() {
             // this rect is in client coords instead of screenspace coords, so we need to convert it
-            let mut covered_rect = RECT::default();
-            covered_rect.left = if rect.left() as i32 == 0 {
-                // don't cover the resizing border
-                if window_style & WS_THICKFRAME.0 == 0 {
-                    rc_window.left
+            let covered_rect = RECT {
+                left: if rect.left() as i32 == 0 {
+                    // don't cover the resizing border
+                    if window_style & WS_THICKFRAME.0 == 0 {
+                        rc_window.left
+                    } else {
+                        // we have a resize border, so account for that
+                        rc_window.left + 10
+                    }
                 } else {
-                    // we have a resize border, so account for that
-                    rc_window.left + 10
-                }
-            } else {
-                rc_window.left + rect.left().ceil() as i32
+                    rc_window.left + rect.left().ceil() as i32
+                },
+                right: rc_window.left + rect.right().ceil() as i32,
+                top: rc_window.top + 10,
+                bottom: rc_window.top + rect.bottom().ceil() as i32,
             };
-            covered_rect.right = rc_window.left + rect.right().ceil() as i32;
-            covered_rect.top = rc_window.top + 10;
-            covered_rect.bottom = rc_window.top + rect.bottom().ceil() as i32;
 
             if cursor_pos.x >= covered_rect.left
                 && cursor_pos.x <= covered_rect.right
@@ -341,8 +341,8 @@ fn hit_test_nca(hwnd: HWND, _: usize, lparam: isize, uidsubclass: usize) -> isiz
                 u_row = 0;
 
                 // otherwise, use the caption dragging, ONLY IF not within 10 of X sides
-            } else if !(cursor_pos.x >= rc_window.left && cursor_pos.x < rc_window.left + 10)
-                && !(cursor_pos.x < rc_window.right && cursor_pos.x >= rc_window.right - 10)
+            } else if !(cursor_pos.x >= rc_window.left && cursor_pos.x < rc_window.left + 10
+                || cursor_pos.x < rc_window.right && cursor_pos.x >= rc_window.right - 10)
             {
                 u_row = 0;
             }
@@ -371,8 +371,11 @@ fn hit_test_nca(hwnd: HWND, _: usize, lparam: isize, uidsubclass: usize) -> isiz
 }
 
 pub unsafe fn win32_captionbtn_rect(hwnd: HWND) -> Option<RECT> {
-    let mut tbi = TITLEBARINFOEX::default();
-    tbi.cbSize = std::mem::size_of::<TITLEBARINFOEX>() as u32;
+    let mut tbi = TITLEBARINFOEX {
+        cbSize: std::mem::size_of::<TITLEBARINFOEX>() as u32,
+        ..Default::default()
+    };
+
     SendMessageW(
         hwnd,
         WM_GETTITLEBARINFOEX,
@@ -399,13 +402,7 @@ pub unsafe fn win32_captionbtn_rect(hwnd: HWND) -> Option<RECT> {
     let right_bound = tbi
         .rgrect
         .iter()
-        .filter(|r| {
-            if r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0 {
-                false
-            } else {
-                true
-            }
-        })
+        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
         .reduce(|acc, e| if acc.right > e.right { acc } else { e })
         .unwrap_or(&RECT::default())
         .right;
@@ -418,13 +415,7 @@ pub unsafe fn win32_captionbtn_rect(hwnd: HWND) -> Option<RECT> {
     let left_bound = tbi
         .rgrect
         .iter()
-        .filter(|r| {
-            if r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0 {
-                false
-            } else {
-                true
-            }
-        })
+        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
         .reduce(|acc, e| if acc.left < e.left { acc } else { e })
         .unwrap()
         .left;
@@ -432,13 +423,7 @@ pub unsafe fn win32_captionbtn_rect(hwnd: HWND) -> Option<RECT> {
     let bottom_bound = tbi
         .rgrect
         .iter()
-        .filter(|r| {
-            if r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0 {
-                false
-            } else {
-                true
-            }
-        })
+        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
         .reduce(|acc, e| if acc.bottom > e.bottom { acc } else { e })
         .unwrap()
         .bottom;

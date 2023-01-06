@@ -1,7 +1,11 @@
 use std::sync::mpsc::Sender;
 
-use egui::{vec2, Color32, Rect, TextStyle, Ui, Vec2};
-use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign};
+use egui::{vec2, Color32, Rect, TextStyle, Ui, Vec2, Window};
+use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign, TabIndex};
+use serde::{Deserialize, Serialize};
+
+use crate::config::{Command, Config, MenuCommand, TabCommand};
+use crate::utils::data::Data;
 
 #[cfg(target_os = "windows")]
 use {
@@ -22,46 +26,53 @@ const TITLEBAR_HEIGHT: f32 = 40.0 as f32;
 #[cfg(target_os = "windows")]
 const TAB_PLUS_SIZE: f32 = 24.0;
 
-pub type Tab = String;
 pub type Tree = egui_dock::Tree<Tab>;
+
 // Each rectangle is an entire tree; not a single tab
 #[cfg(target_os = "windows")]
 pub type CoveredRects = SmallVec<[Rect; 10]>;
 
-pub trait TreeTabs {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tab {
+    name: String,
+    content: String,
+}
+
+pub trait TreeTabs
+where
+    Self: Sized,
+{
     fn init() -> Self;
 }
 
+// Initialize the initial tabs / tab data
 impl TreeTabs for Tree {
     fn init() -> Self {
-        let tree = Tree::new(vec![
-            "tab1".to_owned(),
-            "tab2".to_owned(),
-            "tab34444".to_owned(),
-        ]);
+        let tab = Tab {
+            name: "Scratch 1".to_string(),
+            content: "".to_string(),
+        };
 
-        tree
+        Tree::new(vec![tab])
     }
 }
 
 pub struct Dock<'app> {
     #[cfg(target_os = "windows")]
     tx: &'app Sender<CoveredRects>,
-    tree: &'app mut Tree,
 }
 
 impl<'app> Dock<'app> {
-    #[cfg(target_os = "windows")]
-    pub fn new(tree: &'app mut Tree, tx: &'app Sender<CoveredRects>) -> Self {
-        Self { tx, tree }
+    pub fn new(#[cfg(target_os = "windows")] tx: &'app Sender<CoveredRects>) -> Self {
+        Self {
+            #[cfg(target_os = "windows")]
+            tx,
+        }
     }
 
-    #[cfg(not(target_os = "windows"))]
-    pub fn new(tree: &'app mut Tree) -> Self {
-        Self { tree }
-    }
+    pub fn show(self, ctx: &egui::Context, config: &mut Config) {
+        let tree = &mut config.dock.tree;
 
-    pub fn show(mut self, ctx: &egui::Context) {
         let mut style = Style::from_egui(ctx.style().as_ref());
 
         // important, otherwise it'll draw over the original titlebar
@@ -73,36 +84,92 @@ impl<'app> Dock<'app> {
         style.add_tab_align = TabAddAlign::Left;
         style.show_context_menu = true;
 
-        let mut tab_viewer = TabViewer {};
+        let tab_data = TabData::new();
+        let mut tab_viewer = TabViewer::new(ctx, &tab_data);
 
-        let ui = DockArea::new(&mut self.tree)
+        let ui = DockArea::new(tree)
             .style(style.clone())
             .show(ctx, &mut tab_viewer);
 
         // get list of covered rectangles for decorator
         #[cfg(target_os = "windows")]
         {
-            let covered_rects = self.tree.covered(ui, style, &mut tab_viewer);
+            let covered_rects = tree.covered(ui, style, &mut tab_viewer);
             let _ = self.tx.send(covered_rects);
+        }
+
+        // add data to command vec
+        config
+            .dock
+            .command
+            .extend_from_slice(tab_data.get().as_slice());
+    }
+}
+
+type TabData = Data<Command>;
+
+struct TabViewer<'a> {
+    ctx: &'a egui::Context,
+    data: &'a TabData,
+}
+
+impl<'a> TabViewer<'a> {
+    fn new(ctx: &'a egui::Context, data: &'a TabData) -> Self {
+        Self { ctx, data }
+    }
+}
+
+impl egui_dock::TabViewer for TabViewer<'_> {
+    type Tab = Tab;
+
+    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+        ui.label(format!("Content of {}", tab.name));
+    }
+
+    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
+        (&*tab.name).into()
+    }
+
+    fn on_add(&mut self, node: NodeIndex) {
+        let mut data = self.data.get_mut();
+        data.push(Command::TabCommand(TabCommand::Add(node)));
+    }
+
+    fn context_menu(
+        &mut self,
+        ui: &mut Ui,
+        tab: &mut Self::Tab,
+        tabindex: TabIndex,
+        nodeindex: NodeIndex,
+    ) {
+        let mut data = self.data.get_mut();
+
+        let rename_btn = ui.button("Rename".to_string()).clicked();
+        let save_btn = ui.button("Save...".to_string()).clicked();
+        let share_btn = ui.button("Share to Playground".to_string()).clicked();
+
+        let mut command = None;
+
+        if rename_btn {
+            command = Some(MenuCommand::Rename((nodeindex, tabindex, ui.min_rect())));
+        }
+
+        if save_btn || share_btn {
+            command = Some(if save_btn {
+                MenuCommand::Save((nodeindex, tabindex))
+            } else {
+                MenuCommand::Share((nodeindex, tabindex))
+            });
+        }
+
+        if let Some(command) = command {
+            data.push(Command::MenuCommand(command));
+            ui.close_menu();
         }
     }
 }
 
-#[derive(Debug)]
-struct TabViewer {}
-
-impl egui_dock::TabViewer for TabViewer {
-    type Tab = Tab;
-
-    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        ui.label(format!("Content of {tab}"));
-    }
-
-    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        (&*tab).into()
-    }
-}
-
+#[cfg(target_os = "windows")]
 trait TreeCoveredArea {
     fn covered(
         &mut self,
@@ -112,6 +179,7 @@ trait TreeCoveredArea {
     ) -> CoveredRects;
 }
 
+#[cfg(target_os = "windows")]
 impl TreeCoveredArea for Tree {
     // Calculate the covered surface area for the entire tree, and return it in a list
     fn covered(
@@ -217,5 +285,27 @@ impl TreeCoveredArea for Tree {
         }
 
         covered_rects
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct TabEvents {
+    rename: Option<(NodeIndex, TabIndex, Rect)>,
+}
+
+impl TabEvents {
+    fn show(&mut self, ctx: &egui::Context, tree: &mut Tree) {
+        if self.rename.is_some() {
+            self.show_rename_window(ctx, tree);
+        }
+    }
+
+    fn show_rename_window(&mut self, ctx: &egui::Context, tree: &mut Tree) {
+        let (nodeindex, tabindex, rect) = self.rename.unwrap();
+
+        let tab = tree.get_tab_mut(nodeindex, tabindex).unwrap();
+        dbg!("foo");
+
+        Window::new(&tab.name).title_bar(true).show(ctx, |ui| {});
     }
 }

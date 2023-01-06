@@ -1414,6 +1414,7 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "regex",
+ "serde",
  "smallvec",
  "tracing-subscriber",
  "windows 0.43.0",

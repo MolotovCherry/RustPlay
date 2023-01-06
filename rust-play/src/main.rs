@@ -7,15 +7,17 @@
 // For specific OS support, like custom windows titlebars
 mod os;
 
-mod init;
+mod config;
 mod panic;
 mod popup;
+mod utils;
 mod widgets;
 
 #[cfg(target_os = "windows")]
 use {
     os::windows::{
         custom_frame::{self},
+        init::load_app_icon,
         win_version::is_supported_os,
     },
     std::sync::mpsc::{channel, Sender},
@@ -24,10 +26,10 @@ use {
 
 use std::sync::mpsc::Receiver;
 
-use widgets::dock::{Dock, Tree, TreeTabs};
-
+use config::Config;
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
+use widgets::dock::Dock;
 
 use eframe::{egui, NativeOptions};
 
@@ -48,7 +50,7 @@ fn main() {
 
     #[cfg(target_os = "windows")]
     let app = {
-        let (app, rx) = RustPlay::new();
+        let (app, rx) = App::new();
 
         custom_frame::init(rx);
 
@@ -56,12 +58,12 @@ fn main() {
     };
 
     #[cfg(not(target_os = "windows"))]
-    let app = RustPlay::new();
+    let app = App::new();
 
     tracing_subscriber::fmt::init();
 
     let options = NativeOptions {
-        icon_data: Some(init::load_app_icon()),
+        icon_data: Some(load_app_icon()),
         //min_window_size: Some(Vec2::new(500.0, 400.0)),
         transparent: true,
         resizable: true,
@@ -72,22 +74,22 @@ fn main() {
     eframe::run_native("Rust Play", options, Box::new(|_cc| Box::new(app)));
 }
 
-struct RustPlay {
+struct App {
+    config: Config,
     // sends the covered tab area over to the custom frames hit testing code so we can differenitate between
     // tab and uncovered titlebar
     #[cfg(target_os = "windows")]
     tx: Sender<CoveredRects>,
-    tree: Tree,
 }
 
-impl RustPlay {
+impl App {
     #[cfg(target_os = "windows")]
     fn new() -> (Self, Receiver<CoveredRects>) {
         let (tx, rx) = channel();
 
         let app = Self {
             tx,
-            tree: Tree::init(),
+            config: Config::default(),
         };
 
         (app, rx)
@@ -95,17 +97,31 @@ impl RustPlay {
 
     #[cfg(not(target_os = "windows"))]
     fn new() -> Self {
-        Self { tree: Tree::init() }
+        Self {
+            config: Config::default(),
+        }
     }
 }
 
-impl eframe::App for RustPlay {
+impl eframe::App for App {
     // Clear the overlay over the entire background so we have a blank slate to work with
     fn clear_color(&self, _: &egui::Visuals) -> egui::Rgba {
         egui::Rgba::TRANSPARENT
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        Dock::new(&mut self.tree, &self.tx).show(ctx);
+        self.show_dock(ctx);
+
+        //dbg!(&self.config.dock.tab_command);
+    }
+}
+
+impl App {
+    fn show_dock(&mut self, ctx: &egui::Context) {
+        Dock::new(
+            #[cfg(target_os = "windows")]
+            &self.tx,
+        )
+        .show(ctx, &mut self.config);
     }
 }

@@ -676,6 +676,14 @@ impl<Tab> Tree<Tab> {
         }
     }
 
+    pub fn get_tab_mut(&mut self, node_index: NodeIndex, tab_index: TabIndex) -> Option<&mut Tab> {
+        if let Some(Node::Leaf { tabs, .. }) = self.tree.get_mut(node_index.0) {
+            return tabs.iter_mut().nth(tab_index.0);
+        }
+
+        None
+    }
+
     /// Pushes `tab` to the currently focused leaf.
     ///
     /// If no leaf is focused it will be pushed to the first available leaf.

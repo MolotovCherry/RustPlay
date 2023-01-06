@@ -162,7 +162,14 @@ pub trait TabViewer {
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab);
 
     /// Content inside context_menu.
-    fn context_menu(&mut self, _ui: &mut Ui, _tab: &mut Self::Tab) {}
+    fn context_menu(
+        &mut self,
+        _ui: &mut Ui,
+        _tab: &mut Self::Tab,
+        _tabindex: TabIndex,
+        _nodeindex: NodeIndex,
+    ) {
+    }
 
     /// The title to be displayed.
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText;
@@ -500,7 +507,7 @@ impl<'tree, Tab> DockArea<'tree, Tab> {
 
                                 if style.show_context_menu {
                                     response.0.clone().context_menu(|ui| {
-                                        tab_viewer.context_menu(ui, tab);
+                                        tab_viewer.context_menu(ui, tab, tab_index, node_index);
                                         if style.show_close_buttons && ui.button("Close").clicked()
                                         {
                                             if tab_viewer.on_close(tab) {
