@@ -102,7 +102,7 @@ impl<'app> Dock<'app> {
         config
             .dock
             .command
-            .extend_from_slice(tab_data.get().as_slice());
+            .extend_from_slice(tab_data.borrow().as_slice());
     }
 }
 
@@ -131,7 +131,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn on_add(&mut self, node: NodeIndex) {
-        let mut data = self.data.get_mut();
+        let mut data = self.data.borrow_mut();
         data.push(Command::TabCommand(TabCommand::Add(node)));
     }
 
@@ -142,7 +142,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         tabindex: TabIndex,
         nodeindex: NodeIndex,
     ) {
-        let mut data = self.data.get_mut();
+        let mut data = self.data.borrow_mut();
 
         let rename_btn = ui.button("Rename".to_string()).clicked();
         let save_btn = ui.button("Save...".to_string()).clicked();

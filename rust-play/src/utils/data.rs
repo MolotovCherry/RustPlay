@@ -24,11 +24,15 @@ impl<DataType, const N: usize> Data<DataType, N> {
         }
     }
 
-    pub fn get(&self) -> Ref<InnerData<DataType, N>> {
+    pub fn borrow(&self) -> Ref<InnerData<DataType, N>> {
         self.data.borrow()
     }
 
-    pub fn get_mut(&self) -> RefMut<InnerData<DataType, N>> {
+    pub fn borrow_mut(&self) -> RefMut<InnerData<DataType, N>> {
         self.data.borrow_mut()
+    }
+
+    pub fn get_mut(&mut self) -> &mut InnerData<DataType, N> {
+        self.data.get_mut()
     }
 }
