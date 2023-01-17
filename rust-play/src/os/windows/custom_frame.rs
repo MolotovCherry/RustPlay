@@ -3,34 +3,35 @@ use std::{
     sync::{mpsc::Receiver, Mutex},
 };
 
+use crate::widgets::titlebar::TITLEBAR_HEIGHT;
 use crate::CoveredRects;
 use egui::{mutex::RwLock, Pos2, Rect};
 use once_cell::sync::OnceCell;
 use smallvec::SmallVec;
+
+use windows::Win32::UI::WindowsAndMessaging::{
+    SetWindowLongPtrW, WM_CREATE, WM_STYLECHANGED, WS_SYSMENU,
+};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Dwm::{DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmIsCompositionEnabled},
     System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
     UI::{
         Controls::MARGINS,
-        HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Shell::{DefSubclassProc, SetWindowSubclass},
         WindowsAndMessaging::{
             AdjustWindowRectEx, CallNextHookEx, DefWindowProcW, GetClassLongW, GetWindowLongPtrW,
-            GetWindowLongW, GetWindowPlacement, GetWindowRect, SendMessageW, SetWindowsHookExW,
-            GCW_ATOM, GWL_STYLE, HCBT_CREATEWND, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION,
-            HTLEFT, HTNOWHERE, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, MINMAXINFO,
-            NCCALCSIZE_PARAMS, SM_CXFRAME, SM_CXPADDEDBORDER, SM_CYFRAME, SW_SHOWMAXIMIZED,
-            TITLEBARINFOEX, WH_CBT, WINDOWPLACEMENT, WINDOW_EX_STYLE, WM_ACTIVATE,
-            WM_GETMINMAXINFO, WM_GETTITLEBARINFOEX, WM_NCCALCSIZE, WM_NCHITTEST, WS_BORDER,
-            WS_CAPTION, WS_OVERLAPPEDWINDOW, WS_THICKFRAME, WS_VISIBLE,
+            GetWindowLongW, GetWindowRect, SendMessageW, SetWindowsHookExW, GCW_ATOM, GWL_STYLE,
+            HCBT_CREATEWND, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTNOWHERE,
+            HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, MINMAXINFO, TITLEBARINFOEX, WH_CBT,
+            WINDOW_EX_STYLE, WM_GETMINMAXINFO, WM_GETTITLEBARINFOEX, WM_NCCALCSIZE, WM_NCHITTEST,
+            WS_BORDER, WS_CAPTION, WS_OVERLAPPEDWINDOW, WS_THICKFRAME, WS_VISIBLE,
         },
     },
 };
 
 use super::dwm_win32::apply_acrylic;
 
-pub const TITLEBAR_HEIGHT: i32 = 80;
 const WC_DIALOG: u32 = 0x8002;
 
 static COVERED_TITLEBAR_AREA: OnceCell<RwLock<CoveredRects>> = OnceCell::new();
@@ -171,7 +172,7 @@ unsafe fn custom_subclass_proc(
     let mut l_ret = l_ret.0;
 
     match u_msg {
-        WM_ACTIVATE => {
+        WM_CREATE => {
             // Extend the frame into the client area.
             let margins = MARGINS {
                 cxLeftWidth: 0,
@@ -182,10 +183,15 @@ unsafe fn custom_subclass_proc(
 
             DwmExtendFrameIntoClientArea(hwnd, &margins).expect("Failed to extend frame");
 
-            apply_acrylic(hwnd);
+            apply_acrylic(hwnd, None);
+        }
 
-            *f_call_dsp = false;
-            l_ret = 0;
+        WM_STYLECHANGED => {
+            // remove all caption buttons - we'll manually implement them instead
+            let current_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+            if current_style & WS_SYSMENU.0 as isize > 0 {
+                SetWindowLongPtrW(hwnd, GWL_STYLE, current_style & !(WS_SYSMENU.0 as isize));
+            }
         }
 
         WM_NCCALCSIZE => {
@@ -193,26 +199,26 @@ unsafe fn custom_subclass_proc(
                 return DefWindowProcW(hwnd, u_msg, WPARAM(wparam), LPARAM(lparam)).0;
             }
 
-            let dpi = GetDpiForWindow(hwnd);
+            // let dpi = GetDpiForWindow(hwnd);
 
-            let frame_x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
-            let frame_y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
-            let padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+            // let frame_x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
+            // let frame_y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
+            // let padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
 
-            let mut params = *(lparam as *mut NCCALCSIZE_PARAMS);
-            let rc_rect = &mut params.rgrc[0];
+            // let mut params = *(lparam as *mut NCCALCSIZE_PARAMS);
+            // let rc_rect = &mut params.rgrc[0];
 
-            rc_rect.right -= frame_x + padding;
-            rc_rect.left += frame_x + padding;
-            rc_rect.bottom -= frame_y + padding;
+            // rc_rect.right -= frame_x + padding;
+            // rc_rect.left += frame_x + padding;
+            // rc_rect.bottom -= frame_y + padding;
 
-            // check if it's maximized
-            let mut placement = WINDOWPLACEMENT::default();
-            if GetWindowPlacement(hwnd, &mut placement).as_bool()
-                && placement.showCmd == SW_SHOWMAXIMIZED
-            {
-                rc_rect.top += padding;
-            }
+            // // check if it's maximized
+            // let mut placement = WINDOWPLACEMENT::default();
+            // if GetWindowPlacement(hwnd, &mut placement).as_bool()
+            //     && placement.showCmd == SW_SHOWMAXIMIZED
+            // {
+            //     rc_rect.top += padding;
+            // }
 
             *f_call_dsp = false;
             l_ret = 0;
@@ -220,11 +226,7 @@ unsafe fn custom_subclass_proc(
 
         // conduct non-client hit testing
         WM_NCHITTEST => {
-            // handle hit testing caption buttons if DwmDefWindowProc passed
-            if !*f_call_dsp {
-                return l_ret;
-            }
-
+            // for ease, we will always return HTNOWHERE and let egui handle this, except for the maximize button
             l_ret = hit_test_nca(hwnd, wparam, lparam, uidsubclass);
 
             if l_ret != HTNOWHERE as isize {
@@ -367,71 +369,7 @@ fn hit_test_nca(hwnd: HWND, _: usize, lparam: isize, uidsubclass: usize) -> isiz
         ],
         [HTLEFT, HTNOWHERE, HTRIGHT],
         [HTBOTTOMLEFT, HTBOTTOM, HTBOTTOMRIGHT],
-    ][u_row][u_col] as isize
-}
+    ][u_row][u_col] as isize;
 
-pub unsafe fn win32_captionbtn_rect(hwnd: HWND) -> Option<RECT> {
-    let mut tbi = TITLEBARINFOEX {
-        cbSize: std::mem::size_of::<TITLEBARINFOEX>() as u32,
-        ..Default::default()
-    };
-
-    SendMessageW(
-        hwnd,
-        WM_GETTITLEBARINFOEX,
-        WPARAM(0),
-        LPARAM(&mut tbi as *mut _ as _),
-    );
-
-    let mut rect = RECT::default();
-
-    let mut rc_window = RECT::default();
-    unsafe {
-        GetWindowRect(hwnd, &mut rc_window);
-    }
-
-    // nothing is displaying yet
-    if tbi.rcTitleBar.left == 0
-        && tbi.rcTitleBar.right == 0
-        && tbi.rcTitleBar.bottom == 0
-        && tbi.rcTitleBar.top == 0
-    {
-        return None;
-    }
-
-    let right_bound = tbi
-        .rgrect
-        .iter()
-        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
-        .reduce(|acc, e| if acc.right > e.right { acc } else { e })
-        .unwrap_or(&RECT::default())
-        .right;
-
-    // this shouldn't be 0, so all of them are probably 0
-    if right_bound == 0 {
-        return None;
-    }
-
-    let left_bound = tbi
-        .rgrect
-        .iter()
-        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
-        .reduce(|acc, e| if acc.left < e.left { acc } else { e })
-        .unwrap()
-        .left;
-
-    let bottom_bound = tbi
-        .rgrect
-        .iter()
-        .filter(|r| !(r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0))
-        .reduce(|acc, e| if acc.bottom > e.bottom { acc } else { e })
-        .unwrap()
-        .bottom;
-
-    rect.bottom = bottom_bound;
-    rect.top = rc_window.top;
-    rect.left = left_bound;
-    rect.right = right_bound;
-
-    Some(rect)
+    return HTNOWHERE as isize;
 }

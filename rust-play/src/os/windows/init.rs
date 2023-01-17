@@ -92,7 +92,7 @@ pub fn load_app_icon() -> IconData {
 
     // Flip the image vertically
     let row_size = width as usize * 4; // number of pixels in each row
-    let row_count = buffer.len() as usize / row_size; // number of rows in the image
+    let row_count = buffer.len() / row_size; // number of rows in the image
     for row in 0..row_count / 2 {
         // loop through half of the rows
         let start = row * row_size; // index of the start of the current row

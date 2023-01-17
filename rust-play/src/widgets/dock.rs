@@ -1,15 +1,16 @@
 use std::sync::mpsc::Sender;
 
-use egui::{vec2, Color32, Rect, TextStyle, Ui, Vec2, Window};
+use egui::{vec2, Align2, Color32, Id, LayerId, Rect, TextStyle, Ui, Vec2, Window};
 use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign, TabIndex};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Command, Config, MenuCommand, TabCommand};
+use crate::config::{Command, Config, GitHub, MenuCommand, TabCommand};
 use crate::utils::data::Data;
+
+use super::titlebar::TITLEBAR_HEIGHT;
 
 #[cfg(target_os = "windows")]
 use {
-    crate::os::windows::custom_frame::{self, win32_captionbtn_rect},
     smallvec::SmallVec,
     windows::Win32::{
         Foundation::RECT,
@@ -17,11 +18,6 @@ use {
     },
 };
 
-// Height of the title bar
-#[cfg(target_os = "windows")]
-const TITLEBAR_HEIGHT: f32 = (custom_frame::TITLEBAR_HEIGHT / 2) as f32;
-#[cfg(not(target_os = "windows"))]
-const TITLEBAR_HEIGHT: f32 = 40.0 as f32;
 // private constant in egui_dock
 #[cfg(target_os = "windows")]
 const TAB_PLUS_SIZE: f32 = 24.0;
@@ -70,14 +66,14 @@ impl<'app> Dock<'app> {
         }
     }
 
-    pub fn show(self, ctx: &egui::Context, config: &mut Config) {
+    pub fn show(self, ctx: &egui::Context, config: &mut Config, ui: &mut Ui) {
         let tree = &mut config.dock.tree;
 
         let mut style = Style::from_egui(ctx.style().as_ref());
 
         // important, otherwise it'll draw over the original titlebar
         style.tab_bar_background_color = Color32::TRANSPARENT;
-        style.tab_bar_height = TITLEBAR_HEIGHT;
+        style.tab_bar_height = TITLEBAR_HEIGHT as f32 / 2.0;
         style.tabs_are_draggable = true;
         style.tab_include_scrollarea = false;
         style.show_add_buttons = true;
@@ -87,9 +83,9 @@ impl<'app> Dock<'app> {
         let tab_data = TabData::new();
         let mut tab_viewer = TabViewer::new(ctx, &tab_data);
 
-        let ui = DockArea::new(tree)
+        DockArea::new(tree)
             .style(style.clone())
-            .show(ctx, &mut tab_viewer);
+            .show_inside(ui, &mut tab_viewer);
 
         // get list of covered rectangles for decorator
         #[cfg(target_os = "windows")]
@@ -101,7 +97,7 @@ impl<'app> Dock<'app> {
         // add data to command vec
         config
             .dock
-            .command
+            .commands
             .extend_from_slice(tab_data.borrow().as_slice());
     }
 }
@@ -151,7 +147,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         let mut command = None;
 
         if rename_btn {
-            command = Some(MenuCommand::Rename((nodeindex, tabindex, ui.min_rect())));
+            command = Some(MenuCommand::Rename((nodeindex, tabindex)));
         }
 
         if save_btn || share_btn {
@@ -173,7 +169,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 trait TreeCoveredArea {
     fn covered(
         &mut self,
-        ui: Ui,
+        ui: &mut Ui,
         style: Style,
         viewer: &mut impl egui_dock::TabViewer<Tab = Tab>,
     ) -> CoveredRects;
@@ -184,7 +180,7 @@ impl TreeCoveredArea for Tree {
     // Calculate the covered surface area for the entire tree, and return it in a list
     fn covered(
         &mut self,
-        ui: Ui,
+        ui: &mut Ui,
         style: Style,
         viewer: &mut impl egui_dock::TabViewer<Tab = Tab>,
     ) -> CoveredRects {
@@ -254,32 +250,34 @@ impl TreeCoveredArea for Tree {
                         total_tabs_size.set_left(total_tabs_size.left() * 2.0 - 10.0);
                     }
 
+                    covered_rects.push(total_tabs_size);
+
                     // now we got all the dimensions for the rectangle, but we should check if we need to clip it
                     // due to us having a titlebar and all. Let's not go over the minimize, maximize/window, close buttons
-                    let hwnd = unsafe { GetActiveWindow() };
-                    let caption_rect = unsafe { win32_captionbtn_rect(hwnd) };
-                    if let Some(caption_rect) = caption_rect {
-                        // note that the caption rect is in screen coords!
-                        let mut rc_window = RECT::default();
-                        unsafe {
-                            GetWindowRect(hwnd, &mut rc_window);
-                        }
+                    // let hwnd = unsafe { GetActiveWindow() };
+                    // let caption_rect = unsafe { win32_captionbtn_rect(hwnd) };
+                    // if let Some(caption_rect) = caption_rect {
+                    //     // note that the caption rect is in screen coords!
+                    //     let mut rc_window = RECT::default();
+                    //     unsafe {
+                    //         GetWindowRect(hwnd, &mut rc_window);
+                    //     }
 
-                        // now convert the screen coords to local window coords
-                        let mut local_caption_rect = Rect::NOTHING;
-                        local_caption_rect.set_left((caption_rect.left - rc_window.left) as f32);
-                        local_caption_rect.set_right((caption_rect.right - rc_window.left) as f32);
-                        local_caption_rect.set_top((caption_rect.top - rc_window.top) as f32);
-                        local_caption_rect.set_bottom((caption_rect.bottom - rc_window.top) as f32);
+                    //     // now convert the screen coords to local window coords
+                    //     let mut local_caption_rect = Rect::NOTHING;
+                    //     local_caption_rect.set_left((caption_rect.left - rc_window.left) as f32);
+                    //     local_caption_rect.set_right((caption_rect.right - rc_window.left) as f32);
+                    //     local_caption_rect.set_top((caption_rect.top - rc_window.top) as f32);
+                    //     local_caption_rect.set_bottom((caption_rect.bottom - rc_window.top) as f32);
 
-                        // the right side is really the only one that ever clips into it, so..
-                        if total_tabs_size.right() >= (local_caption_rect.left() - 30.0) {
-                            // the right edge of the client area cannot go beyond this
-                            total_tabs_size.set_right(local_caption_rect.left() - 30.0);
-                        }
+                    //     // the right side is really the only one that ever clips into it, so..
+                    //     if total_tabs_size.right() >= (local_caption_rect.left() - 30.0) {
+                    //         // the right edge of the client area cannot go beyond this
+                    //         total_tabs_size.set_right(local_caption_rect.left() - 30.0);
+                    //     }
 
-                        covered_rects.push(total_tabs_size);
-                    }
+                    //     covered_rects.push(total_tabs_size);
+                    // }
                 }
             }
         }
@@ -288,24 +286,79 @@ impl TreeCoveredArea for Tree {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct TabEvents {
-    rename: Option<(NodeIndex, TabIndex, Rect)>,
-}
+#[derive(Debug)]
+pub struct TabEvents;
 
 impl TabEvents {
-    fn show(&mut self, ctx: &egui::Context, tree: &mut Tree) {
-        if self.rename.is_some() {
-            self.show_rename_window(ctx, tree);
-        }
+    pub fn show(ctx: &egui::Context, config: &mut Config) {
+        // Functions which return false remove their item from the vec.
+        config.dock.commands.retain(|i| match i {
+            Command::MenuCommand(command) => match command {
+                MenuCommand::Rename(v) => Self::show_rename_window(ctx, *v, &mut config.dock.tree),
+                MenuCommand::Save(_) => todo!(),
+                MenuCommand::Share(v) => {
+                    Self::share_scratch(*v, &mut config.dock.tree, &config.github)
+                }
+            },
+
+            Command::TabCommand(command) => match command {
+                TabCommand::Add(v) => {
+                    let tab = Tab {
+                        name: format!("Scratch {}", config.dock.counter),
+                        content: "".to_string(),
+                    };
+
+                    config.dock.tree.set_focused_node(*v);
+                    config.dock.tree.push_to_focused_leaf(tab);
+
+                    config.dock.counter += 1;
+
+                    false
+                }
+            },
+        });
     }
 
-    fn show_rename_window(&mut self, ctx: &egui::Context, tree: &mut Tree) {
-        let (nodeindex, tabindex, rect) = self.rename.unwrap();
+    fn show_rename_window(
+        ctx: &egui::Context,
+        (nodeindex, tabindex): (NodeIndex, TabIndex),
+        tree: &mut Tree,
+    ) -> bool {
+        // Get the tabs for the specified nodeindex
+        let Node::Leaf {
+            tabs,
+            ..
+        } = &mut tree[nodeindex] else {
+            unreachable!();
+        };
 
-        let tab = tree.get_tab_mut(nodeindex, tabindex).unwrap();
-        dbg!("foo");
+        // And get the tab by index
+        let tab = &mut tabs[tabindex.0];
 
-        Window::new(&tab.name).title_bar(true).show(ctx, |ui| {});
+        Window::new(&format!("Rename {}", tab.name))
+            .title_bar(false)
+            .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .auto_sized()
+            .show(ctx, |ui| {
+                if ui.button("Done").clicked() {
+                    tab.name = "nice".to_string();
+                    return false;
+                }
+
+                true
+            })
+            .unwrap()
+            .inner
+            .unwrap()
+    }
+
+    fn share_scratch(
+        (nodeindex, tabindex): (NodeIndex, TabIndex),
+        tree: &mut Tree,
+        github: &GitHub,
+    ) -> bool {
+        println!("shared scratch token: {}", github.access_token);
+
+        false
     }
 }

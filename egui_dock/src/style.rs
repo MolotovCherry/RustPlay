@@ -1,11 +1,5 @@
-use crate::win32_captionbtn_rect;
-
 use super::utils::*;
 use egui::{style::Margin, *};
-use windows::Win32::{
-    Foundation::RECT,
-    UI::{Input::KeyboardAndMouse::GetActiveWindow, WindowsAndMessaging::GetWindowRect},
-};
 
 /// Left or right alignment for tab add button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -258,38 +252,6 @@ impl Style {
 
         let mut rect = ui.available_rect_before_wrap();
 
-        // clip the button if it goes into titlebar
-        let mut binding_ui;
-        let ui = if rect.top() == 0.0 {
-            let hwnd = unsafe { GetActiveWindow() };
-            let caption_rect = unsafe { win32_captionbtn_rect(hwnd) };
-
-            if let Some(caption_rect) = caption_rect {
-                let mut rc_window = RECT::default();
-                unsafe {
-                    GetWindowRect(hwnd, &mut rc_window);
-                }
-
-                // now convert the screen coords to local window coords
-                let mut local_caption_rect = Rect::NOTHING;
-                local_caption_rect.set_left(((caption_rect.left - rc_window.left) as f32) / 2.0);
-                local_caption_rect.set_right(((caption_rect.right - rc_window.left) as f32) / 2.0);
-                local_caption_rect.set_top(((caption_rect.top - rc_window.top) as f32) / 2.0);
-                local_caption_rect.set_bottom(((caption_rect.bottom - rc_window.top) as f32) / 2.0);
-
-                let mut clip_rect = rect.clone();
-                clip_rect.set_right(local_caption_rect.left() - 15.0);
-
-                binding_ui = ui.child_ui(rect, Layout::default());
-                binding_ui.set_clip_rect(clip_rect);
-                &mut binding_ui
-            } else {
-                ui
-            }
-        } else {
-            ui
-        };
-
         match self.add_tab_align {
             TabAddAlign::Left => rect.max.x = rect.min.x + desired_size.x,
             TabAddAlign::Right => rect.min.x = rect.max.x - desired_size.x,
@@ -367,38 +329,6 @@ impl Style {
         if !ui.memory().is_anything_being_dragged() && is_being_dragged {
             response = response.on_hover_cursor(CursorIcon::Grab);
         }
-
-        // clip the tab if it goes into titlebar
-        let mut binding_ui;
-        let ui = if rect.top() == 0.0 {
-            let hwnd = unsafe { GetActiveWindow() };
-            let caption_rect = unsafe { win32_captionbtn_rect(hwnd) };
-
-            if let Some(caption_rect) = caption_rect {
-                let mut rc_window = RECT::default();
-                unsafe {
-                    GetWindowRect(hwnd, &mut rc_window);
-                }
-
-                // now convert the screen coords to local window coords
-                let mut local_caption_rect = Rect::NOTHING;
-                local_caption_rect.set_left(((caption_rect.left - rc_window.left) as f32) / 2.0);
-                local_caption_rect.set_right(((caption_rect.right - rc_window.left) as f32) / 2.0);
-                local_caption_rect.set_top(((caption_rect.top - rc_window.top) as f32) / 2.0);
-                local_caption_rect.set_bottom(((caption_rect.bottom - rc_window.top) as f32) / 2.0);
-
-                let mut clip_rect = rect.clone();
-                clip_rect.set_right(local_caption_rect.left() - 15.0);
-
-                binding_ui = ui.child_ui(rect, Layout::default());
-                binding_ui.set_clip_rect(clip_rect);
-                &mut binding_ui
-            } else {
-                ui
-            }
-        } else {
-            ui
-        };
 
         let (x_rect, x_res) = if (active || response.hovered()) && self.show_close_buttons {
             let mut pos = rect.right_top();

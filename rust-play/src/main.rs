@@ -24,14 +24,18 @@ use {
     widgets::dock::CoveredRects,
 };
 
+use std::env;
+use std::fs;
 use std::sync::mpsc::Receiver;
 
 use config::Config;
+use egui::Ui;
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
-use widgets::dock::Dock;
+use widgets::dock::{Dock, TabEvents};
 
 use eframe::{egui, NativeOptions};
+use widgets::titlebar::custom_window_frame;
 
 fn main() {
     // set up custom panic hook
@@ -68,6 +72,8 @@ fn main() {
         transparent: true,
         resizable: true,
         centered: true,
+        #[cfg(not(target_os = "windows"))]
+        decorated: false,
         ..Default::default()
     };
 
@@ -87,10 +93,19 @@ impl App {
     fn new() -> (Self, Receiver<CoveredRects>) {
         let (tx, rx) = channel();
 
-        let app = Self {
-            tx,
-            config: Config::default(),
+        let current_dir = env::current_exe().unwrap().parent().unwrap().to_owned();
+        let file = current_dir.join("settings.toml");
+
+        let mut config = if file.exists() {
+            let content = fs::read_to_string(file).expect("Failed to read config file");
+            toml::from_str::<Config>(&content).expect("Failed to deserialize Config")
+        } else {
+            Config::default()
         };
+
+        config.dock.counter = 2;
+
+        let app = Self { tx, config };
 
         (app, rx)
     }
@@ -104,24 +119,44 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn on_close_event(&mut self) -> bool {
+        // Write config to settings.toml
+
+        let config_string =
+            toml::to_string(&self.config).expect("Failed to convert config to toml");
+
+        let current_dir = env::current_exe().unwrap().parent().unwrap().to_owned();
+        let file = current_dir.join("settings.toml");
+
+        fs::write(file, config_string).expect("Failed to write config file");
+
+        true
+    }
+
     // Clear the overlay over the entire background so we have a blank slate to work with
     fn clear_color(&self, _: &egui::Visuals) -> egui::Rgba {
         egui::Rgba::TRANSPARENT
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.show_dock(ctx);
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        custom_window_frame(ctx, frame, |ui| {
+            self.show_dock(ctx, ui);
+        });
 
-        //dbg!(&self.config.dock.tab_command);
+        self.handle_tabs(ctx);
     }
 }
 
 impl App {
-    fn show_dock(&mut self, ctx: &egui::Context) {
+    fn show_dock(&mut self, ctx: &egui::Context, ui: &mut Ui) {
         Dock::new(
             #[cfg(target_os = "windows")]
             &self.tx,
         )
-        .show(ctx, &mut self.config);
+        .show(ctx, &mut self.config, ui);
+    }
+
+    fn handle_tabs(&mut self, ctx: &egui::Context) {
+        TabEvents::show(ctx, &mut self.config);
     }
 }

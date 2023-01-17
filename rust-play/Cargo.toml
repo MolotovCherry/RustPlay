@@ -22,6 +22,12 @@ lazy_static = "1.4.0"
 windows-dll = "0.4.1"
 smallvec = { version = "1.10.0", features=["const_generics"] }
 serde = "1.0.152"
+toml = "0.5.10"
+reqwest = { version = "0.11.13", features = ["blocking"] }
+thiserror = "1.0.38"
+serde_json = "1.0.91"
+resvg = "0.28.0"
+paste = "1.0.11"
 
 [dependencies.windows]
 version = "0.43.0"

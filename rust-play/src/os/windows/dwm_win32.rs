@@ -18,6 +18,12 @@ use super::win_version::{is_win10_1809, is_win11, is_win11_22h2};
 use crate::popup::{display_popup, MessageBoxIcon};
 use std::ffi::c_void;
 
+use windows::Win32::Foundation::RECT;
+use windows::Win32::Graphics::Dwm::{
+    DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
+};
+use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
+use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 use windows::Win32::{
     Foundation::{BOOL, HWND},
     Graphics::Dwm::{DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWINDOWATTRIBUTE},
@@ -147,7 +153,7 @@ pub fn force_light_theme(hwnd: HWND) {
     }
 }
 
-pub fn apply_acrylic(hwnd: HWND) {
+pub fn apply_acrylic(hwnd: HWND, color: Option<[u8; 4]>) {
     if is_win11_22h2() {
         unsafe {
             DwmSetWindowAttribute(
@@ -159,11 +165,18 @@ pub fn apply_acrylic(hwnd: HWND) {
             .expect("Failed to set window attribute");
         }
     } else {
-        display_popup(
-            "Not available",
-            "\"apply_acrylic()\" is only available on Windows 7+",
-            MessageBoxIcon::Error,
-        );
+        unsafe {
+            set_accent_policy(
+                hwnd,
+                if is_win10_1809() {
+                    ACCENT_STATE::ACCENT_ENABLE_ACRYLICBLURBEHIND
+                } else {
+                    // win7 +
+                    ACCENT_STATE::ACCENT_ENABLE_BLURBEHIND
+                },
+                color,
+            );
+        }
     }
 }
 

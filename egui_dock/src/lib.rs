@@ -254,15 +254,13 @@ impl<'tree, Tab> DockArea<'tree, Tab> {
 
     /// Shows the docking area.
     #[inline]
-    pub fn show(self, ctx: &Context, tab_viewer: &mut impl TabViewer<Tab = Tab>) -> Ui {
+    pub fn show(self, ctx: &Context, tab_viewer: &mut impl TabViewer<Tab = Tab>) {
         let layer_id = LayerId::background();
         let max_rect = ctx.available_rect();
         let clip_rect = ctx.available_rect();
 
         let mut ui = Ui::new(ctx.clone(), layer_id, self.id, max_rect, clip_rect);
         self.show_inside(&mut ui, tab_viewer);
-
-        ui
     }
 
     /// Shows the docking hierarchy inside a `Ui`.
@@ -303,40 +301,6 @@ impl<'tree, Tab> DockArea<'tree, Tab> {
         let mut to_remove = Vec::new();
         let mut new_focused = None;
 
-        let mut _binding_ui;
-        let (binding_ui, titlebar_split_rect) = {
-            let hwnd = unsafe { GetActiveWindow() };
-            let caption_rect = unsafe { win32_captionbtn_rect(hwnd) }.unwrap_or(RECT::default());
-
-            let mut rc_window = RECT::default();
-            unsafe {
-                GetWindowRect(hwnd, &mut rc_window);
-            }
-
-            // now convert the screen coords to local window coords
-            let mut local_caption_rect = Rect::NOTHING;
-            local_caption_rect.set_left(((caption_rect.left - rc_window.left) as f32) / 2.0);
-            local_caption_rect.set_right(((caption_rect.right - rc_window.left) as f32) / 2.0);
-            local_caption_rect.set_top(((caption_rect.top - rc_window.top) as f32) / 2.0);
-            local_caption_rect.set_bottom(((caption_rect.bottom - rc_window.top) as f32) / 2.0);
-
-            let mut clip_rect = rect.clone();
-            clip_rect.set_right(local_caption_rect.left() - 15.0);
-            clip_rect.set_top(0.0);
-
-            _binding_ui = ui.child_ui(rect, Layout::default());
-            _binding_ui.set_clip_rect(clip_rect);
-
-            // we need to separate this into 2 rects. One over the titlebar, and the normal one in the body
-            let mut titlebar_rect = Rect::NOTHING;
-            titlebar_rect.set_left(0.0);
-            titlebar_rect.set_top(0.0);
-            titlebar_rect.set_bottom(style.tab_bar_height);
-            titlebar_rect.set_right(local_caption_rect.left() - 15.0);
-
-            (&mut _binding_ui, titlebar_rect)
-        };
-
         // Deal with Horizontal and Vertical nodes first
         for node_index in 0..self.tree.len() {
             let node_index = NodeIndex(node_index);
@@ -346,8 +310,8 @@ impl<'tree, Tab> DockArea<'tree, Tab> {
             {
                 let rect = expand_to_pixel(*rect, pixels_per_point);
 
-                let (response, left, mut separator, right) = if is_horizontal {
-                    style.hsplit(binding_ui, fraction, rect)
+                let (response, left, separator, right) = if is_horizontal {
+                    style.hsplit(ui, fraction, rect)
                 } else {
                     style.vsplit(ui, fraction, rect)
                 };
@@ -360,19 +324,7 @@ impl<'tree, Tab> DockArea<'tree, Tab> {
                     style.separator_color_idle
                 };
 
-                if is_horizontal {
-                    let intersection = separator.intersect(titlebar_split_rect);
-
-                    binding_ui
-                        .painter()
-                        .rect_filled(intersection, Rounding::none(), color);
-
-                    // now paint tab body part of the horizontal bar with ordinary painter
-                    separator.set_top(style.tab_bar_height - 1.0);
-                    ui.painter().rect_filled(separator, Rounding::none(), color);
-                } else {
-                    ui.painter().rect_filled(separator, Rounding::none(), color);
-                }
+                ui.painter().rect_filled(separator, Rounding::none(), color);
 
                 self.tree[node_index.left()].set_rect(left);
                 self.tree[node_index.right()].set_rect(right);
