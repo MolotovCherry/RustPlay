@@ -1,16 +1,13 @@
-use std::{
-    cmp::max,
-    sync::{mpsc::Receiver, Mutex},
-};
+use std::sync::{mpsc::Receiver, Mutex};
 
 use crate::widgets::titlebar::TITLEBAR_HEIGHT;
-use crate::CoveredRects;
-use egui::{mutex::RwLock, Pos2, Rect};
+use crate::CaptionMaxRect;
+use egui::{mutex::RwLock, Rect};
 use once_cell::sync::OnceCell;
-use smallvec::SmallVec;
 
 use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowLongPtrW, WM_CREATE, WM_STYLECHANGED, WS_SYSMENU,
+    SetWindowLongPtrW, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, WM_CREATE, WM_NCLBUTTONDOWN,
+    WM_STYLECHANGED, WS_SYSMENU,
 };
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
@@ -21,11 +18,10 @@ use windows::Win32::{
         Shell::{DefSubclassProc, SetWindowSubclass},
         WindowsAndMessaging::{
             AdjustWindowRectEx, CallNextHookEx, DefWindowProcW, GetClassLongW, GetWindowLongPtrW,
-            GetWindowLongW, GetWindowRect, SendMessageW, SetWindowsHookExW, GCW_ATOM, GWL_STYLE,
-            HCBT_CREATEWND, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTNOWHERE,
-            HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, MINMAXINFO, TITLEBARINFOEX, WH_CBT,
-            WINDOW_EX_STYLE, WM_GETMINMAXINFO, WM_GETTITLEBARINFOEX, WM_NCCALCSIZE, WM_NCHITTEST,
-            WS_BORDER, WS_CAPTION, WS_OVERLAPPEDWINDOW, WS_THICKFRAME, WS_VISIBLE,
+            GetWindowLongW, GetWindowRect, SetWindowsHookExW, GCW_ATOM, GWL_STYLE, HCBT_CREATEWND,
+            HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTLEFT, HTNOWHERE, HTRIGHT, HTTOP, HTTOPLEFT,
+            HTTOPRIGHT, WH_CBT, WINDOW_EX_STYLE, WM_NCCALCSIZE, WM_NCHITTEST, WS_BORDER,
+            WS_CAPTION, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
         },
     },
 };
@@ -34,7 +30,7 @@ use super::dwm_win32::apply_acrylic;
 
 const WC_DIALOG: u32 = 0x8002;
 
-static COVERED_TITLEBAR_AREA: OnceCell<RwLock<CoveredRects>> = OnceCell::new();
+static MAX_RECT: OnceCell<RwLock<CaptionMaxRect>> = OnceCell::new();
 
 // macro_rules! RGB {
 //     ($r:expr, $g:expr, $b:expr) => {{
@@ -57,16 +53,16 @@ macro_rules! y_coord {
     };
 }
 
-pub fn init(receiver: Receiver<CoveredRects>) {
+pub fn init(receiver: Receiver<CaptionMaxRect>) {
     // continually update the covered titlebar area
-    let _ = COVERED_TITLEBAR_AREA.set(RwLock::new(SmallVec::new()));
+    let _ = MAX_RECT.set(RwLock::new(Rect::NOTHING));
 
     // thread to watch for events down the channel and update them
     std::thread::spawn(move || loop {
         let rects = receiver.recv();
 
         if let Ok(rects) = rects {
-            let mut writer = COVERED_TITLEBAR_AREA.get().unwrap().write();
+            let mut writer = MAX_RECT.get().unwrap().write();
             *writer = rects;
         } else {
             break;
@@ -199,27 +195,6 @@ unsafe fn custom_subclass_proc(
                 return DefWindowProcW(hwnd, u_msg, WPARAM(wparam), LPARAM(lparam)).0;
             }
 
-            // let dpi = GetDpiForWindow(hwnd);
-
-            // let frame_x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
-            // let frame_y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
-            // let padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-
-            // let mut params = *(lparam as *mut NCCALCSIZE_PARAMS);
-            // let rc_rect = &mut params.rgrc[0];
-
-            // rc_rect.right -= frame_x + padding;
-            // rc_rect.left += frame_x + padding;
-            // rc_rect.bottom -= frame_y + padding;
-
-            // // check if it's maximized
-            // let mut placement = WINDOWPLACEMENT::default();
-            // if GetWindowPlacement(hwnd, &mut placement).as_bool()
-            //     && placement.showCmd == SW_SHOWMAXIMIZED
-            // {
-            //     rc_rect.top += padding;
-            // }
-
             *f_call_dsp = false;
             l_ret = 0;
         }
@@ -234,27 +209,15 @@ unsafe fn custom_subclass_proc(
             }
         }
 
-        WM_GETMINMAXINFO => {
-            if uidsubclass == 1 {
-                let mut minmaxinfo = &mut *(lparam as *mut MINMAXINFO);
-
-                let reader = COVERED_TITLEBAR_AREA.get().unwrap().read();
-                // noteL:: this is in window coords, not screen space coords!
-                let blank_rect = Rect::from_two_pos(Pos2::new(0.0, 0.0), Pos2::new(0.0, 0.0));
-                let collision_rect = *reader
-                    .iter()
-                    .reduce(|acc, e| if acc.right() < e.right() { acc } else { e })
-                    .unwrap_or(&blank_rect);
-
-                // only allowed to go as far as the latest tab
-                minmaxinfo.ptMinTrackSize.x =
-                    max((collision_rect.left() + collision_rect.right()) as i32, 500);
-                minmaxinfo.ptMinTrackSize.y = 500;
-
+        // When HTMAXBUTTON is pressed, DO NOT let default handler handle it, just no-op it
+        WM_NCLBUTTONDOWN => match wparam as u32 {
+            HTMINBUTTON | HTMAXBUTTON | HTCLOSE => {
                 *f_call_dsp = false;
                 l_ret = 0;
             }
-        }
+
+            _ => (),
+        },
 
         _ => (),
     }
@@ -287,89 +250,54 @@ fn hit_test_nca(hwnd: HWND, _: usize, lparam: isize, uidsubclass: usize) -> isiz
         );
     }
 
-    // test if the window is resizable; entire frame should be draggable if it's not resizable
-    let window_style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) as u32 };
-
     // Determine if the hit test is for resizing. Default middle (1,1).
     let mut u_row = 1;
     let mut u_col = 1;
-    let mut f_on_resize_border = false;
 
-    let mut hit_client_area = false;
-    // Calculate here whether we are on client area in the titlebar and skip the hittesting code
-    // ONLY do this for the main window, cause that's the one with the tabs
+    // Calculate here whether we are on client area in the titlebar and trigger the maximize button
     if uidsubclass == 1 {
-        let covered_area = COVERED_TITLEBAR_AREA.get().unwrap().read();
-        for rect in covered_area.iter() {
-            // this rect is in client coords instead of screenspace coords, so we need to convert it
-            let covered_rect = RECT {
-                left: if rect.left() as i32 == 0 {
-                    // don't cover the resizing border
-                    if window_style & WS_THICKFRAME.0 == 0 {
-                        rc_window.left
-                    } else {
-                        // we have a resize border, so account for that
-                        rc_window.left + 10
-                    }
-                } else {
-                    rc_window.left + rect.left().ceil() as i32
-                },
-                right: rc_window.left + rect.right().ceil() as i32,
-                top: rc_window.top + 10,
-                bottom: rc_window.top + rect.bottom().ceil() as i32,
-            };
+        let rect = MAX_RECT.get().unwrap().read();
 
-            if cursor_pos.x >= covered_rect.left
-                && cursor_pos.x <= covered_rect.right
-                && cursor_pos.y >= covered_rect.top
-                && cursor_pos.y <= covered_rect.bottom
-            {
-                hit_client_area = true;
-                break;
-            }
+        // this rect is in client coords instead of screenspace coords, so we need to convert it
+        let covered_rect = RECT {
+            left: rc_window.left + (rect.left().ceil() as i32 * 2),
+            right: rc_window.left + (rect.right().ceil() as i32 * 2),
+            top: rc_window.top + 5,
+            bottom: rc_window.top + (rect.bottom().ceil() as i32 * 2),
+        };
+
+        if cursor_pos.x >= covered_rect.left
+            && cursor_pos.x <= covered_rect.right
+            && cursor_pos.y >= covered_rect.top
+            && cursor_pos.y <= covered_rect.bottom
+        {
+            return HTMAXBUTTON as isize;
         }
     }
 
-    // only check if we hit non-client area
-    if !hit_client_area {
-        // Determine if the point is at the top or bottom of the window.
+    // Determine if the point is at the top or bottom of the window.
 
-        // First, check if we're anywhere on the titlebar
-        if cursor_pos.y >= rc_window.top && cursor_pos.y < rc_window.top + TITLEBAR_HEIGHT {
-            // now check if we're on the titlebar division for top resizing
-            if cursor_pos.y >= rc_window.top && cursor_pos.y < rc_window.top + 10 {
-                // use the top resizing, but ONLY if window is not resizable
-                f_on_resize_border = window_style & WS_THICKFRAME.0 > 0;
-                u_row = 0;
-
-                // otherwise, use the caption dragging, ONLY IF not within 10 of X sides
-            } else if !(cursor_pos.x >= rc_window.left && cursor_pos.x < rc_window.left + 10
-                || cursor_pos.x < rc_window.right && cursor_pos.x >= rc_window.right - 10)
-            {
-                u_row = 0;
-            }
-        } else if cursor_pos.y < rc_window.bottom && cursor_pos.y >= rc_window.bottom - 10 {
-            u_row = 2;
+    // First, check if we're anywhere on the titlebar
+    if cursor_pos.y >= rc_window.top && cursor_pos.y < rc_window.top + TITLEBAR_HEIGHT {
+        // now check if we're on the titlebar division for top resizing
+        if cursor_pos.y >= rc_window.top && cursor_pos.y < rc_window.top + 5 {
+            u_row = 0;
         }
+    } else if cursor_pos.y < rc_window.bottom && cursor_pos.y >= rc_window.bottom - 10 {
+        u_row = 2;
+    }
 
-        // Determine if the point is at the left or right of the window.
-        if cursor_pos.x >= rc_window.left && cursor_pos.x < rc_window.left + 10 {
-            u_col = 0; // left side
-        } else if cursor_pos.x < rc_window.right && cursor_pos.x >= rc_window.right - 10 {
-            u_col = 2; // right side
-        }
+    // Determine if the point is at the left or right of the window.
+    if cursor_pos.x >= rc_window.left && cursor_pos.x < rc_window.left + 10 {
+        u_col = 0; // left side
+    } else if cursor_pos.x < rc_window.right && cursor_pos.x >= rc_window.right - 10 {
+        u_col = 2; // right side
     }
 
     // Hit test (HTTOPLEFT, ... HTBOTTOMRIGHT)
     [
-        [
-            HTTOPLEFT,
-            if f_on_resize_border { HTTOP } else { HTCAPTION },
-            HTTOPRIGHT,
-        ],
+        [HTTOPLEFT, HTTOP, HTTOPRIGHT],
         [HTLEFT, HTNOWHERE, HTRIGHT],
         [HTBOTTOMLEFT, HTBOTTOM, HTBOTTOMRIGHT],
-    ][u_row][u_col] as isize;
-
-    return HTNOWHERE as isize;
+    ][u_row][u_col] as isize
 }

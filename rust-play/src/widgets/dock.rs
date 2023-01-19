@@ -1,6 +1,4 @@
-use std::sync::mpsc::Sender;
-
-use egui::{vec2, Align2, Color32, Id, LayerId, Rect, TextStyle, Ui, Vec2, Window};
+use egui::{vec2, Align2, Color32, Ui, Window};
 use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign, TabIndex};
 use serde::{Deserialize, Serialize};
 
@@ -9,24 +7,7 @@ use crate::utils::data::Data;
 
 use super::titlebar::TITLEBAR_HEIGHT;
 
-#[cfg(target_os = "windows")]
-use {
-    smallvec::SmallVec,
-    windows::Win32::{
-        Foundation::RECT,
-        UI::{Input::KeyboardAndMouse::GetActiveWindow, WindowsAndMessaging::GetWindowRect},
-    },
-};
-
-// private constant in egui_dock
-#[cfg(target_os = "windows")]
-const TAB_PLUS_SIZE: f32 = 24.0;
-
 pub type Tree = egui_dock::Tree<Tab>;
-
-// Each rectangle is an entire tree; not a single tab
-#[cfg(target_os = "windows")]
-pub type CoveredRects = SmallVec<[Rect; 10]>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tab {
@@ -53,20 +34,10 @@ impl TreeTabs for Tree {
     }
 }
 
-pub struct Dock<'app> {
-    #[cfg(target_os = "windows")]
-    tx: &'app Sender<CoveredRects>,
-}
+pub struct Dock;
 
-impl<'app> Dock<'app> {
-    pub fn new(#[cfg(target_os = "windows")] tx: &'app Sender<CoveredRects>) -> Self {
-        Self {
-            #[cfg(target_os = "windows")]
-            tx,
-        }
-    }
-
-    pub fn show(self, ctx: &egui::Context, config: &mut Config, ui: &mut Ui) {
+impl Dock {
+    pub fn show(ctx: &egui::Context, config: &mut Config, ui: &mut Ui) {
         let tree = &mut config.dock.tree;
 
         let mut style = Style::from_egui(ctx.style().as_ref());
@@ -86,13 +57,6 @@ impl<'app> Dock<'app> {
         DockArea::new(tree)
             .style(style.clone())
             .show_inside(ui, &mut tab_viewer);
-
-        // get list of covered rectangles for decorator
-        #[cfg(target_os = "windows")]
-        {
-            let covered_rects = tree.covered(ui, style, &mut tab_viewer);
-            let _ = self.tx.send(covered_rects);
-        }
 
         // add data to command vec
         config
@@ -162,127 +126,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             data.push(Command::MenuCommand(command));
             ui.close_menu();
         }
-    }
-}
-
-#[cfg(target_os = "windows")]
-trait TreeCoveredArea {
-    fn covered(
-        &mut self,
-        ui: &mut Ui,
-        style: Style,
-        viewer: &mut impl egui_dock::TabViewer<Tab = Tab>,
-    ) -> CoveredRects;
-}
-
-#[cfg(target_os = "windows")]
-impl TreeCoveredArea for Tree {
-    // Calculate the covered surface area for the entire tree, and return it in a list
-    fn covered(
-        &mut self,
-        ui: &mut Ui,
-        style: Style,
-        viewer: &mut impl egui_dock::TabViewer<Tab = Tab>,
-    ) -> CoveredRects {
-        // Update and send over covered rectangles for the win32 decorator to properly handle ca in nca
-        let mut covered_rects = CoveredRects::new();
-
-        for node_index in 0..self.len() {
-            let node_index = NodeIndex(node_index);
-            if let Node::Leaf { rect, tabs, .. } = &mut self[node_index] {
-                // Make sure the rect coords are actual coods, and they're on the top bar (we don't care otherwise if they're not in the decorator)
-                if rect.is_finite() && rect.top() == 0.0 {
-                    let mut total_tabs_size = Rect::NOTHING;
-                    total_tabs_size.set_left(rect.left());
-                    total_tabs_size.set_top(0.0);
-                    total_tabs_size.set_bottom(style.tab_bar_height);
-                    total_tabs_size.set_right(0.0);
-
-                    let height_topbar = style.tab_bar_height;
-
-                    let bottom_y = rect.min.y + height_topbar;
-                    let tabbar = rect.intersect(Rect::everything_above(bottom_y));
-
-                    let mut available_width = tabbar.max.x - tabbar.min.x;
-                    if style.show_add_buttons {
-                        available_width -= TAB_PLUS_SIZE;
-                    }
-                    let expanded_width = available_width / (tabs.len() as f32);
-
-                    // add up the individual tab sizes
-                    for tab in tabs.iter_mut() {
-                        let label = viewer.title(tab);
-
-                        let galley = label.into_galley(&ui, None, f32::INFINITY, TextStyle::Button);
-
-                        let x_size = Vec2::splat(galley.size().y / 1.3);
-
-                        let offset = vec2(8.0, 0.0);
-
-                        let desired_size = if style.expand_tabs {
-                            vec2(expanded_width, style.tab_bar_height)
-                        } else if style.show_close_buttons {
-                            vec2(
-                                galley.size().x + offset.x * 2.0 + x_size.x + 5.0,
-                                style.tab_bar_height,
-                            )
-                        } else {
-                            vec2(galley.size().x + offset.x * 2.0, style.tab_bar_height)
-                        };
-
-                        // increase the right edge size by x
-
-                        total_tabs_size.set_right(
-                            total_tabs_size.left() + total_tabs_size.right() + desired_size.x,
-                        );
-                    }
-
-                    if style.show_add_buttons {
-                        total_tabs_size.set_right(total_tabs_size.right() + TAB_PLUS_SIZE);
-                    }
-
-                    // multiply it by 2 to get the total screen size for win32
-                    total_tabs_size.set_right(total_tabs_size.right() * 2.0);
-                    total_tabs_size.set_bottom(total_tabs_size.bottom() * 2.0);
-
-                    if total_tabs_size.left() > 0.0 {
-                        // 10 is used to allow for resize handle in titlebar
-                        total_tabs_size.set_left(total_tabs_size.left() * 2.0 - 10.0);
-                    }
-
-                    covered_rects.push(total_tabs_size);
-
-                    // now we got all the dimensions for the rectangle, but we should check if we need to clip it
-                    // due to us having a titlebar and all. Let's not go over the minimize, maximize/window, close buttons
-                    // let hwnd = unsafe { GetActiveWindow() };
-                    // let caption_rect = unsafe { win32_captionbtn_rect(hwnd) };
-                    // if let Some(caption_rect) = caption_rect {
-                    //     // note that the caption rect is in screen coords!
-                    //     let mut rc_window = RECT::default();
-                    //     unsafe {
-                    //         GetWindowRect(hwnd, &mut rc_window);
-                    //     }
-
-                    //     // now convert the screen coords to local window coords
-                    //     let mut local_caption_rect = Rect::NOTHING;
-                    //     local_caption_rect.set_left((caption_rect.left - rc_window.left) as f32);
-                    //     local_caption_rect.set_right((caption_rect.right - rc_window.left) as f32);
-                    //     local_caption_rect.set_top((caption_rect.top - rc_window.top) as f32);
-                    //     local_caption_rect.set_bottom((caption_rect.bottom - rc_window.top) as f32);
-
-                    //     // the right side is really the only one that ever clips into it, so..
-                    //     if total_tabs_size.right() >= (local_caption_rect.left() - 30.0) {
-                    //         // the right edge of the client area cannot go beyond this
-                    //         total_tabs_size.set_right(local_caption_rect.left() - 30.0);
-                    //     }
-
-                    //     covered_rects.push(total_tabs_size);
-                    // }
-                }
-            }
-        }
-
-        covered_rects
     }
 }
 

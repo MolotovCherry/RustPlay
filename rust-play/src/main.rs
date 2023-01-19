@@ -21,21 +21,25 @@ use {
         win_version::is_supported_os,
     },
     std::sync::mpsc::{channel, Sender},
-    widgets::dock::CoveredRects,
 };
 
 use std::env;
 use std::fs;
+use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
 use config::Config;
-use egui::Ui;
+use egui::{Rect, Ui};
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
 use widgets::dock::{Dock, TabEvents};
 
 use eframe::{egui, NativeOptions};
 use widgets::titlebar::custom_window_frame;
+
+// Each rectangle is an entire tree; not a single tab
+#[cfg(target_os = "windows")]
+pub type CaptionMaxRect = Rect;
 
 fn main() {
     // set up custom panic hook
@@ -85,12 +89,12 @@ struct App {
     // sends the covered tab area over to the custom frames hit testing code so we can differenitate between
     // tab and uncovered titlebar
     #[cfg(target_os = "windows")]
-    tx: Sender<CoveredRects>,
+    tx: Rc<Sender<CaptionMaxRect>>,
 }
 
 impl App {
     #[cfg(target_os = "windows")]
-    fn new() -> (Self, Receiver<CoveredRects>) {
+    fn new() -> (Self, Receiver<CaptionMaxRect>) {
         let (tx, rx) = channel();
 
         let current_dir = env::current_exe().unwrap().parent().unwrap().to_owned();
@@ -105,7 +109,10 @@ impl App {
 
         config.dock.counter = 2;
 
-        let app = Self { tx, config };
+        let app = Self {
+            tx: Rc::new(tx),
+            config,
+        };
 
         (app, rx)
     }
@@ -115,6 +122,14 @@ impl App {
         Self {
             config: Config::default(),
         }
+    }
+
+    fn show_dock(&mut self, ctx: &egui::Context, ui: &mut Ui) {
+        Dock::show(ctx, &mut self.config, ui);
+    }
+
+    fn handle_tabs(&mut self, ctx: &egui::Context) {
+        TabEvents::show(ctx, &mut self.config);
     }
 }
 
@@ -139,24 +154,16 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        custom_window_frame(ctx, frame, |ui| {
-            self.show_dock(ctx, ui);
-        });
+        custom_window_frame(
+            ctx,
+            frame,
+            #[cfg(target_os = "windows")]
+            Rc::clone(&self.tx),
+            |ui| {
+                self.show_dock(ctx, ui);
+            },
+        );
 
         self.handle_tabs(ctx);
-    }
-}
-
-impl App {
-    fn show_dock(&mut self, ctx: &egui::Context, ui: &mut Ui) {
-        Dock::new(
-            #[cfg(target_os = "windows")]
-            &self.tx,
-        )
-        .show(ctx, &mut self.config, ui);
-    }
-
-    fn handle_tabs(&mut self, ctx: &egui::Context) {
-        TabEvents::show(ctx, &mut self.config);
     }
 }

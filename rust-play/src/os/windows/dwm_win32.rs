@@ -18,16 +18,9 @@ use super::win_version::{is_win10_1809, is_win11, is_win11_22h2};
 use crate::popup::{display_popup, MessageBoxIcon};
 use std::ffi::c_void;
 
-use windows::Win32::Foundation::RECT;
-use windows::Win32::Graphics::Dwm::{
-    DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
-};
-use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
-use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 use windows::Win32::{
     Foundation::{BOOL, HWND},
-    Graphics::Dwm::{DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWINDOWATTRIBUTE},
-    UI::Controls::MARGINS,
+    Graphics::Dwm::{DwmSetWindowAttribute, DWMWINDOWATTRIBUTE},
 };
 
 use windows_dll::dll;

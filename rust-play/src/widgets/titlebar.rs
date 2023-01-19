@@ -1,14 +1,26 @@
+use std::cell::Cell;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
+
 use egui::{
-    lerp, vec2, CentralPanel, Color32, ColorImage, Context, Frame, Id, Image, Rect, Rgba, Sense,
-    Stroke, TextureHandle, Ui,
+    lerp, vec2, CentralPanel, Color32, ColorImage, Context, Frame, Id, Image, Pos2, Rect, Rgba,
+    Sense, Stroke, TextureHandle, Ui,
 };
 
 use once_cell::sync::OnceCell;
 use resvg::{tiny_skia, usvg};
-use windows::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
-use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowPlacement, ShowWindow, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, WINDOWPLACEMENT,
+use windows::Win32::Foundation::POINT;
+use windows::Win32::Graphics::Gdi::ScreenToClient;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetActiveWindow, GetAsyncKeyState, GetKeyState, VK_LBUTTON, VK_RBUTTON,
 };
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetCursorPos, GetSystemMetrics, GetWindowPlacement, ShowWindow, SM_SWAPBUTTON, SW_MAXIMIZE,
+    SW_MINIMIZE, SW_RESTORE, WINDOWPLACEMENT,
+};
+
+use crate::CaptionMaxRect;
 
 pub const TITLEBAR_HEIGHT: i32 = 80;
 pub const CAPTION_WIDTH_CLOSE: u32 = 94;
@@ -26,6 +38,7 @@ macro_rules! egui_dimens {
 pub fn custom_window_frame(
     ctx: &egui::Context,
     frame: &mut eframe::Frame,
+    #[cfg(target_os = "windows")] sender: Rc<Sender<CaptionMaxRect>>,
     add_contents: impl FnOnce(&mut Ui),
 ) {
     let is_maximized = unsafe {
@@ -99,6 +112,8 @@ pub fn custom_window_frame(
             maximize_rect.set_left(close_rect.left() - CAPT_WIDTH_MAXRESTORE - 1.0);
             maximize_rect.set_right(close_rect.left() - 1.0);
             maximize_rect.set_bottom(capt_height);
+
+            let _ = sender.send(maximize_rect);
 
             // minimize rect
             let mut minimize_rect = rect;
@@ -210,6 +225,7 @@ macro_rules! icon {
     };
 }
 
+#[derive(Debug, PartialEq)]
 enum CaptionIcon {
     Close,
     MaximizeRestore,
@@ -239,10 +255,81 @@ fn caption_btn(
     let id = Id::new(id);
 
     let response = ui.interact(rect, id, sense);
+    // workaround for windows, where not returning HTNOWHERE fails to detect clicks, etc
+    let mut clicked = false;
+    static PRESSED: [AtomicBool; 3] = [
+        AtomicBool::new(false),
+        AtomicBool::new(false),
+        AtomicBool::new(false),
+    ];
+
+    let btn_index = match icon {
+        CaptionIcon::Minimize => 0,
+        CaptionIcon::MaximizeRestore => 1,
+        CaptionIcon::Close => 2,
+    };
 
     // workaround for a problem where checking if hovered, or using hovered pos is imprecise
     // so use the mouse coords and check it's inside the rect to make it exact
-    let target_value = if let Some(pos) = ctx.pointer_latest_pos() {
+    let cursor_pos = if cfg!(target_os = "windows") {
+        // On Windows, if you do not return HTNOWHERE, then ctx.pointer_latest_pos() fails
+        // This happens for our max button, which needs special handling for the snaplayout
+        let mut point = POINT::default();
+        unsafe {
+            GetCursorPos(&mut point);
+            ScreenToClient(GetActiveWindow(), &mut point);
+        }
+
+        Some(Pos2::new(point.x as f32 / 2.0, point.y as f32 / 2.0))
+    } else {
+        ctx.pointer_latest_pos()
+    };
+
+    // the reason this code is here is because HTMAXBUTTON messes with sense, and I can't properly detect clicks with egui
+    if cfg!(target_os = "windows") {
+        unsafe {
+            // properly handle swapped buttons too
+            let btn = if GetSystemMetrics(SM_SWAPBUTTON) == 0 {
+                VK_LBUTTON.0
+            } else {
+                VK_RBUTTON.0
+            };
+
+            // (minimize, max/restore, close)
+            static BTN_STATE: [AtomicBool; 3] = [
+                AtomicBool::new(false),
+                AtomicBool::new(false),
+                AtomicBool::new(false),
+            ];
+
+            let click_state = GetAsyncKeyState(btn as i32) as i32;
+
+            let state = BTN_STATE[btn_index].load(Ordering::Relaxed);
+
+            let click = click_state & 0x8000 != 0;
+
+            if click && !state {
+                // mouse pressed down
+                if let Some(pos) = cursor_pos {
+                    PRESSED[btn_index].store(rect.contains(pos), Ordering::Relaxed);
+                }
+
+                BTN_STATE[btn_index].store(true, Ordering::Relaxed);
+            } else if !click && state {
+                // mouse released
+                PRESSED[btn_index].store(false, Ordering::Relaxed);
+                BTN_STATE[btn_index].store(false, Ordering::Relaxed);
+
+                if let Some(pos) = cursor_pos {
+                    clicked = rect.contains(pos);
+                }
+            }
+        }
+    }
+
+    let pressed = PRESSED[btn_index].load(Ordering::Relaxed);
+
+    let target_value = if let Some(pos) = cursor_pos {
         rect.contains(pos)
     } else {
         false
@@ -252,13 +339,13 @@ fn caption_btn(
 
     let hover_color = lerp(Rgba::from(Color32::TRANSPARENT)..=Rgba::from(color), anim);
 
-    if response.clicked() {
+    if response.clicked() || clicked {
         painter.rect(rect, 0.0, clicked_color, Stroke::NONE);
         action();
-    } else if response.is_pointer_button_down_on() || response.dragged() {
+    } else if response.is_pointer_button_down_on() || response.dragged() || pressed {
         // only allow dragging as long as mouse is within button
         // unlike other times, dragging out of the area causes it to instantly disappear rather than fade (we're not calling else)
-        if rect.contains(ctx.pointer_latest_pos().unwrap_or_default()) {
+        if rect.contains(cursor_pos.unwrap_or_default()) {
             painter.rect(rect, 0.0, clicked_color, Stroke::NONE);
         }
     } else {
