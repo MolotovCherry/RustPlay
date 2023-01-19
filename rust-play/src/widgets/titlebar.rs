@@ -26,7 +26,7 @@ pub const CAPTION_WIDTH_CLOSE: u32 = 94;
 pub const CAPTION_WIDTH_MAXRESTORE: u32 = 87;
 pub const CAPTION_WIDTH_MINIMIZE: u32 = 92;
 pub const CAPTION_HEIGHT: u32 = 58;
-pub const CAPTION_PADDING: u32 = 4;
+pub const CAPTION_PADDING: u32 = 2;
 
 macro_rules! egui_dimens {
     ($var:ident) => {
