@@ -27,6 +27,9 @@ pub const CAPTION_WIDTH_MAXRESTORE: u32 = 87;
 pub const CAPTION_WIDTH_MINIMIZE: u32 = 92;
 pub const CAPTION_HEIGHT: u32 = 58;
 pub const CAPTION_PADDING: u32 = 2;
+// the style shows resize grips, and this is how much space to ignore on the caption buttons so they don't show up
+// if your mouse is showing resize handles
+pub const CAPTION_TOP_PADDING: u32 = 5;
 
 macro_rules! egui_dimens {
     ($var:ident) => {
@@ -253,7 +256,15 @@ fn caption_btn(
 
     let id = Id::new(id);
 
-    let response = ui.interact(rect, id, sense);
+    let mut caption_padding = rect;
+    caption_padding.set_top(caption_padding.top() + CAPTION_TOP_PADDING as f32 / 2.0);
+
+    // this one sits on the right hand side
+    if icon == CaptionIcon::Close {
+        caption_padding.set_right(caption_padding.right() - CAPTION_TOP_PADDING as f32);
+    }
+
+    let response = ui.interact(caption_padding, id, sense);
     // workaround for windows, where not returning HTNOWHERE fails to detect clicks, etc
     let mut clicked = false;
     static PRESSED: [AtomicBool; 3] = [
@@ -309,7 +320,7 @@ fn caption_btn(
         if click && !state {
             // mouse pressed down
             if let Some(pos) = cursor_pos {
-                PRESSED[btn_index].store(rect.contains(pos), Ordering::Relaxed);
+                PRESSED[btn_index].store(caption_padding.contains(pos), Ordering::Relaxed);
             }
 
             BTN_STATE[btn_index].store(true, Ordering::Relaxed);
@@ -319,7 +330,7 @@ fn caption_btn(
             BTN_STATE[btn_index].store(false, Ordering::Relaxed);
 
             if let Some(pos) = cursor_pos {
-                clicked = rect.contains(pos);
+                clicked = caption_padding.contains(pos);
             }
         }
     }
@@ -327,7 +338,7 @@ fn caption_btn(
     let pressed = PRESSED[btn_index].load(Ordering::Relaxed);
 
     let target_value = if let Some(pos) = cursor_pos {
-        rect.contains(pos)
+        caption_padding.contains(pos)
     } else {
         false
     };
