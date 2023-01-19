@@ -286,42 +286,40 @@ fn caption_btn(
 
     // the reason this code is here is because HTMAXBUTTON messes with sense, and I can't properly detect clicks with egui
     if cfg!(target_os = "windows") {
-        unsafe {
-            // properly handle swapped buttons too
-            let btn = if GetSystemMetrics(SM_SWAPBUTTON) == 0 {
-                VK_LBUTTON.0
-            } else {
-                VK_RBUTTON.0
-            };
+        // properly handle swapped buttons too
+        let btn = if unsafe { GetSystemMetrics(SM_SWAPBUTTON) } == 0 {
+            VK_LBUTTON.0
+        } else {
+            VK_RBUTTON.0
+        };
 
-            // (minimize, max/restore, close)
-            static BTN_STATE: [AtomicBool; 3] = [
-                AtomicBool::new(false),
-                AtomicBool::new(false),
-                AtomicBool::new(false),
-            ];
+        // (minimize, max/restore, close)
+        static BTN_STATE: [AtomicBool; 3] = [
+            AtomicBool::new(false),
+            AtomicBool::new(false),
+            AtomicBool::new(false),
+        ];
 
-            let click_state = GetAsyncKeyState(btn as i32) as i32;
+        let click_state = unsafe { GetAsyncKeyState(btn as i32) as i32 };
 
-            let state = BTN_STATE[btn_index].load(Ordering::Relaxed);
+        let state = BTN_STATE[btn_index].load(Ordering::Relaxed);
 
-            let click = click_state & 0x8000 != 0;
+        let click = click_state & 0x8000 != 0;
 
-            if click && !state {
-                // mouse pressed down
-                if let Some(pos) = cursor_pos {
-                    PRESSED[btn_index].store(rect.contains(pos), Ordering::Relaxed);
-                }
+        if click && !state {
+            // mouse pressed down
+            if let Some(pos) = cursor_pos {
+                PRESSED[btn_index].store(rect.contains(pos), Ordering::Relaxed);
+            }
 
-                BTN_STATE[btn_index].store(true, Ordering::Relaxed);
-            } else if !click && state {
-                // mouse released
-                PRESSED[btn_index].store(false, Ordering::Relaxed);
-                BTN_STATE[btn_index].store(false, Ordering::Relaxed);
+            BTN_STATE[btn_index].store(true, Ordering::Relaxed);
+        } else if !click && state {
+            // mouse released
+            PRESSED[btn_index].store(false, Ordering::Relaxed);
+            BTN_STATE[btn_index].store(false, Ordering::Relaxed);
 
-                if let Some(pos) = cursor_pos {
-                    clicked = rect.contains(pos);
-                }
+            if let Some(pos) = cursor_pos {
+                clicked = rect.contains(pos);
             }
         }
     }
