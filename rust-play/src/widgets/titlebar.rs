@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
@@ -13,7 +12,7 @@ use resvg::{tiny_skia, usvg};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Gdi::ScreenToClient;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetActiveWindow, GetAsyncKeyState, GetKeyState, VK_LBUTTON, VK_RBUTTON,
+    GetActiveWindow, GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetSystemMetrics, GetWindowPlacement, ShowWindow, SM_SWAPBUTTON, SW_MAXIMIZE,

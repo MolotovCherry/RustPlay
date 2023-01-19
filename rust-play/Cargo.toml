@@ -12,7 +12,7 @@ build = "build.rs"
 winres = "0.1.12"
 
 [dependencies]
-egui_dock = { path = "../egui_dock", features = ["serde"] }
+egui_dock = { version = "0.3.1", features = ["serde"] }
 egui = "0.20.1"
 eframe = "0.20.1"
 regex = "1.7.0"
@@ -30,7 +30,7 @@ resvg = "0.28.0"
 paste = "1.0.11"
 
 [dependencies.windows]
-version = "0.43.0"
+version = "0.44.0"
 features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
