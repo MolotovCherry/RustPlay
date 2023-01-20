@@ -127,6 +127,13 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             ui.close_menu();
         }
     }
+
+    fn on_close(&mut self, _tab: &mut Self::Tab) -> bool {
+        let mut data = self.data.borrow_mut();
+        data.push(Command::TabCommand(TabCommand::Close));
+
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -155,6 +162,22 @@ impl TabEvents {
                     config.dock.tree.push_to_focused_leaf(tab);
 
                     config.dock.counter += 1;
+
+                    false
+                }
+
+                TabCommand::Close => {
+                    if config.dock.tree.num_tabs() == 0 {
+                        let tab = Tab {
+                            name: "Scratch 1".to_string(),
+                            content: "".to_string(),
+                        };
+
+                        config.dock.tree.set_focused_node(NodeIndex(0));
+                        config.dock.tree.push_to_focused_leaf(tab);
+
+                        config.dock.counter = 2;
+                    }
 
                     false
                 }

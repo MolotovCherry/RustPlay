@@ -5,7 +5,7 @@ members = [
 
 [workspace.metadata.patch.egui_dock]
 patches = [
-    "patches/egui_dock/context.patch"
+    "patches/egui_dock/context_menu.patch"
 ]
 
 [patch.crates-io]

@@ -39,4 +39,5 @@ pub enum MenuCommand {
 #[derive(Debug, Clone)]
 pub enum TabCommand {
     Add(NodeIndex),
+    Close,
 }
