@@ -42,14 +42,14 @@ static MAX_RECT: OnceCell<RwLock<CaptionMaxRect>> = OnceCell::new();
 // extract low bits for x coord
 macro_rules! x_coord {
     ($x: ident) => {
-        ($x as i32 & 0xffff)
+        ($x as i16 as i32)
     };
 }
 
 // extract high bits for y coord
 macro_rules! y_coord {
     ($y: ident) => {
-        ($y as i32 >> 16 & 0xffff)
+        ($y >> 16) as i32
     };
 }
 
