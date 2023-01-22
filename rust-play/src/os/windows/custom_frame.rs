@@ -83,14 +83,14 @@ pub fn init(receiver: Receiver<CaptionMaxRect>) {
     }
 }
 
-static SUBCLASS_UID_COUNTER: Mutex<usize> = Mutex::new(0);
-
 // Callback function for the window hook
 unsafe extern "system" fn window_hook_callback(
     code: i32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    static SUBCLASS_UID_COUNTER: Mutex<usize> = Mutex::new(0);
+
     if code as u32 == HCBT_CREATEWND {
         let hwnd = HWND(wparam.0 as isize);
 

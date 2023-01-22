@@ -81,7 +81,7 @@ pub fn custom_window_frame(
 
             // Paint the frame:
             painter.rect(
-                rect.shrink(1.0),
+                ui.max_rect(),
                 if cfg!(target_os = "windows") {
                     0.0
                 } else {
