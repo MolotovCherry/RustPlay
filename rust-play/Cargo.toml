@@ -28,6 +28,7 @@ thiserror = "1.0.38"
 serde_json = "1.0.91"
 resvg = "0.28.0"
 paste = "1.0.11"
+syntect = "5.0.0"
 
 [dependencies.windows]
 version = "0.44.0"
