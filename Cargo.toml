@@ -2,11 +2,3 @@
 members = [
     "rust-play"
 ]
-
-[workspace.metadata.patch.egui_dock]
-patches = [
-    "patches/egui_dock/context_menu.patch"
-]
-
-[patch.crates-io]
-egui_dock = { path = "target/patch/egui_dock-0.3.1" }

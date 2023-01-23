@@ -273,8 +273,6 @@ impl CodeEditor {
 
         let mut frame_ui = ui.child_ui(code_rect, Layout::default());
 
-        let id = id.with("code_edit");
-
         let text_widget = egui::TextEdit::multiline(code)
             .font(egui::TextStyle::Monospace) // for cursor height
             .code_editor()

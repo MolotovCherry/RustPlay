@@ -1,6 +1,6 @@
 use crate::widgets::dock::{Tree, TreeTabs};
-use egui::Rect;
-use egui_dock::{NodeIndex, TabIndex};
+use egui::Id;
+use egui_dock::NodeIndex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,13 +31,13 @@ pub enum Command {
 
 #[derive(Debug, Clone)]
 pub enum MenuCommand {
-    Rename((NodeIndex, TabIndex)),
-    Save((NodeIndex, TabIndex)),
-    Share((NodeIndex, TabIndex)),
+    Rename(Id),
+    Save(Id),
+    Share(Id),
 }
 
 #[derive(Debug, Clone)]
 pub enum TabCommand {
     Add(NodeIndex),
-    Close,
+    Close(Id),
 }

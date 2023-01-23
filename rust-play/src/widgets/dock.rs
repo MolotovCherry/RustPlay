@@ -1,6 +1,8 @@
+use egui::text_edit::TextEditState;
 use egui::{vec2, Align2, Color32, Id, Ui, Vec2, Window};
 use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign, TabIndex};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 use crate::config::{Command, Config, GitHub, MenuCommand, TabCommand};
 use crate::utils::data::Data;
@@ -104,7 +106,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         // multiple tabs may be open on the screen, so we need to know if one is focused or not so we don't steal focus
         tab.scroll_offset = Some(tab.editor.show(
-            tab.id,
+            tab.id.with("code_editor"),
             ui,
             tab.scroll_offset.unwrap_or_default(),
             tab.id == self.focused_tab,
@@ -120,13 +122,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         data.push(Command::TabCommand(TabCommand::Add(node)));
     }
 
-    fn context_menu(
-        &mut self,
-        ui: &mut Ui,
-        _tab: &mut Self::Tab,
-        tabindex: TabIndex,
-        nodeindex: NodeIndex,
-    ) {
+    fn context_menu(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         let mut data = self.data.borrow_mut();
 
         let rename_btn = ui.button("Rename".to_string()).clicked();
@@ -136,15 +132,14 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         let mut command = None;
 
         if rename_btn {
-            command = Some(MenuCommand::Rename((nodeindex, tabindex)));
+            command = Some(MenuCommand::Rename(tab.id));
         }
 
         if save_btn || share_btn {
-            let data = (nodeindex, tabindex);
             command = Some(if save_btn {
-                MenuCommand::Save(data)
+                MenuCommand::Save(tab.id)
             } else {
-                MenuCommand::Share(data)
+                MenuCommand::Share(tab.id)
             });
         }
 
@@ -154,9 +149,9 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         }
     }
 
-    fn on_close(&mut self, _tab: &mut Self::Tab) -> bool {
+    fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
         let mut data = self.data.borrow_mut();
-        data.push(Command::TabCommand(TabCommand::Close));
+        data.push(Command::TabCommand(TabCommand::Close(tab.id)));
 
         true
     }
@@ -199,7 +194,16 @@ impl TabEvents {
                     false
                 }
 
-                TabCommand::Close => {
+                TabCommand::Close(id) => {
+                    // TODO: Remove TextEditState from closed tabs so they aren't reused with the same ID
+                    let editor_id = id.with("code_edit");
+
+                    // cleanup old textedit state
+
+                    //let res = ctx.memory().data.remove::<TextEditState>(editor_id);
+
+                    //ctx.memory().data.remove::<TextEditState>(editor_id);
+
                     if config.dock.tree.num_tabs() == 0 {
                         let tab = Tab {
                             name: "Scratch 1".to_string(),
@@ -220,21 +224,17 @@ impl TabEvents {
         });
     }
 
-    fn show_rename_window(
-        ctx: &egui::Context,
-        (nodeindex, tabindex): (NodeIndex, TabIndex),
-        tree: &mut Tree,
-    ) -> bool {
-        // Get the tabs for the specified nodeindex
-        let Node::Leaf {
-            tabs,
-            ..
-        } = &mut tree[nodeindex] else {
-            unreachable!();
-        };
+    fn show_rename_window(ctx: &egui::Context, id: Id, tree: &mut Tree) -> bool {
+        let tab = &mut tree
+            .iter_mut()
+            .filter_map(|node| {
+                let Node::Leaf { tabs, .. } = node else {
+                    return None;
+                };
 
-        // And get the tab by index
-        let tab = &mut tabs[tabindex.0];
+                tabs.iter_mut().find(|tab| tab.id == id)
+            })
+            .collect::<SmallVec<[&mut Tab; 1]>>()[0];
 
         Window::new(&format!("Rename {}", tab.name))
             .title_bar(false)
@@ -253,11 +253,7 @@ impl TabEvents {
             .unwrap()
     }
 
-    fn share_scratch(
-        (nodeindex, tabindex): (NodeIndex, TabIndex),
-        tree: &mut Tree,
-        github: &GitHub,
-    ) -> bool {
+    fn share_scratch(id: Id, tree: &mut Tree, github: &GitHub) -> bool {
         println!("shared scratch token: {}", github.access_token);
 
         false
