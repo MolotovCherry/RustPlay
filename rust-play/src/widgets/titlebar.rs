@@ -347,6 +347,7 @@ fn caption_btn(
 
     let hover_color = lerp(Rgba::from(Color32::TRANSPARENT)..=Rgba::from(color), anim);
 
+    // TODO: response.is_pointer_button_down_on() does it for secondary click too. We wany only primary click
     if response.clicked() || clicked {
         painter.rect(rect, 0.0, clicked_color, Stroke::NONE);
         action();
