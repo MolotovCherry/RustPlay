@@ -1,11 +1,11 @@
 use std::process::Command;
 
-use crate::{BuildType, CargoSubcommand, Channel};
+use crate::{BuildType, Channel, Subcommand};
 
 #[derive(Debug, Default, Clone)]
 pub struct CargoCommandBuilder<'a> {
     pub channel: Option<Channel>,
-    pub subcommand: Option<CargoSubcommand>,
+    pub subcommand: Option<Subcommand>,
     // debug or release
     pub build_type: Option<BuildType>,
     pub cargo_flags: Option<Vec<&'a str>>,
@@ -24,7 +24,7 @@ impl<'a> CargoCommandBuilder<'a> {
         self
     }
 
-    pub fn subcommand(&mut self, subcommand: CargoSubcommand) -> &mut Self {
+    pub fn subcommand(&mut self, subcommand: Subcommand) -> &mut Self {
         self.subcommand = Some(subcommand);
         self
     }
@@ -135,7 +135,7 @@ mod tests {
         let mut builder = CargoCommandBuilder::new();
         builder
             .channel(Channel::Stable)
-            .subcommand(CargoSubcommand::Run)
+            .subcommand(Subcommand::Run)
             .cargo_flags(&["--bar2"])
             .cargo_flag("--foo")
             .cargo_flags(&["--bar", "--baz"])
@@ -162,7 +162,7 @@ mod tests {
         let mut builder = CargoCommandBuilder::new();
         builder
             .channel(Channel::Stable)
-            .subcommand(CargoSubcommand::Run)
+            .subcommand(Subcommand::Run)
             .build_type(BuildType::Debug);
         let command = builder.build();
 

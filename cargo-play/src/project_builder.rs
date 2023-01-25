@@ -25,13 +25,12 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
 
         let edition = self.project.edition;
         let id = self.project.hash;
-        let name = self.project.target_prefix.unwrap_or("cargo-play");
         let dependencies = "";
 
         format!(
             r#"
 [package]
-name = "{name}-{id}"
+name = "p{id}"
 version = "0.1.0"
 edition = "{edition}"
 

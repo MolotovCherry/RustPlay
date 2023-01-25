@@ -21,7 +21,7 @@ pub enum Edition {
 }
 
 #[derive(Debug, Clone, Copy, Default, IntoStaticStr, PartialEq)]
-pub enum CargoSubcommand {
+pub enum Subcommand {
     // Run the proigram
     #[default]
     #[strum(to_string = "run")]
@@ -157,7 +157,7 @@ impl<'a> Project<'a> {
     }
 
     /// Set the cargo command to execute
-    pub fn subcommand(&mut self, subcommand: CargoSubcommand) -> &mut Self {
+    pub fn subcommand(&mut self, subcommand: Subcommand) -> &mut Self {
         self.cargo_command_builder.subcommand(subcommand);
         self
     }
@@ -286,7 +286,7 @@ impl<'a> Project<'a> {
             let paths = std::env::var("PATH").unwrap_or_default();
 
             let reconstituted_paths: Vec<String> = paths
-                .rsplit(ENV_PATH_SEP)
+                .split(ENV_PATH_SEP)
                 .filter(|path| {
                     let path_buffer = PathBuf::from(path);
                     if !path_buffer.ends_with("lib") && !path_buffer.ends_with("bin") {
