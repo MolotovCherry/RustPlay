@@ -36,7 +36,21 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
     for file in files {
         for line in file.code.lines() {
             if line.starts_with(r#"//> "#) {
-                deps.push(line.replace("//> ", ""));
+                let fixed_line = line.replace("//> ", "");
+
+                // find the name of the dependency
+                let name = fixed_line.find('=').map(|i| fixed_line[0..i].trim());
+
+                // remove dependency with same name to avoid conflicts - user provided deps are overrides
+                if let Some(name) = name {
+                    let index = deps.iter().position(|p| p.starts_with(name));
+                    if let Some(i) = index {
+                        deps.remove(i);
+                    }
+                }
+
+                deps.push(fixed_line);
+
                 continue;
             }
 
