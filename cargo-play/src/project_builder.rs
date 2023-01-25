@@ -21,10 +21,9 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
     }
 
     fn create_cargo_toml(&self) -> String {
-        // TODO: Infer dependencies from source code here
-
         let edition = self.project.edition;
         let id = self.project.hash;
+        // if the user has malformed code, or wrong deps that's not our fault. Running cargo will reveal it
         let _ = infer_deps(&self.project.files);
         let dependencies = infer_deps(&self.project.files).unwrap_or_default();
 
