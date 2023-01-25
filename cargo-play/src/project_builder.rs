@@ -33,11 +33,13 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
             .files
             .iter()
             .find(|f| f.name == "main")
+            // this is a hard error. No project can exist without a main file
             .expect("Main file not found");
 
         for l in main_file.code.lines() {
             if l.starts_with("//> ") {
-                extra_cargo.push_str(&format!("{}\n", l.replace("//> ", "")));
+                extra_cargo.push_str(l.strip_prefix("//> ").unwrap());
+                extra_cargo.push('\n');
                 continue;
             } else if l.starts_with("//# ") {
                 // just ignore these lines
@@ -59,7 +61,8 @@ edition = "{edition}"
         );
 
         if !extra_cargo.is_empty() {
-            formatted.push_str(&format!("\n{}", extra_cargo));
+            formatted.push('\n');
+            formatted.push_str(&extra_cargo);
         }
 
         formatted
