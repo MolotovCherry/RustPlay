@@ -26,36 +26,36 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
             }
         });
 
-    for dep in deps.iter_mut() {
-        dep.push_str(r#" = "*""#)
-    }
-
     // Process `//> ` as a direct statement to put inside depenencies
     // Can only appear at beginning of file
     // stops processing when non ``//> ` is found
+    let mut added = 0;
     for file in files {
         for line in file.code.lines() {
-            if line.starts_with(r#"//> "#) {
-                let fixed_line = line.replace("//> ", "");
-
+            if let Some(line) = line.strip_prefix(r#"//> "#) {
                 // find the name of the dependency
-                let name = fixed_line.find('=').map(|i| fixed_line[0..i].trim());
+                let name = line.find('=').map(|i| line[0..i].trim());
 
                 // remove dependency with same name to avoid conflicts - user provided deps are overrides
                 if let Some(name) = name {
-                    let index = deps.iter().position(|p| p.starts_with(name));
+                    let index = deps.iter().position(|p| p == name);
                     if let Some(i) = index {
                         deps.remove(i);
                     }
                 }
 
-                deps.push(fixed_line);
+                deps.insert(0, line.to_string());
+                added += 1;
 
                 continue;
             }
 
             break;
         }
+    }
+
+    for dep in deps.iter_mut().skip(added) {
+        dep.push_str(r#" = "*""#)
     }
 
     Ok(deps.join("\n"))
