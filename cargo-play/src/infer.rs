@@ -32,7 +32,7 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
     let mut added = 0;
     for file in files {
         for line in file.code.lines() {
-            if let Some(line) = line.strip_prefix(r#"//> "#) {
+            if let Some(line) = line.strip_prefix(r#"//# "#) {
                 // find the name of the dependency
                 let name = line.find('=').map(|i| line[0..i].trim());
 

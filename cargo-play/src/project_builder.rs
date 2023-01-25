@@ -27,7 +27,28 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
         let _ = infer_deps(&self.project.files);
         let dependencies = infer_deps(&self.project.files).unwrap_or_default();
 
-        format!(
+        // we can add extra cargo toml, but only in the main file
+        let mut extra_cargo = String::new();
+        let main_file = self
+            .project
+            .files
+            .iter()
+            .find(|f| f.name == "main")
+            .expect("Main file not found");
+
+        for l in main_file.code.lines() {
+            if l.starts_with("//> ") {
+                extra_cargo.push_str(&format!("{}\n", l.replace("//> ", "")));
+                continue;
+            } else if l.starts_with("//# ") {
+                // just ignore these lines
+                continue;
+            }
+
+            break;
+        }
+
+        let mut formatted = format!(
             r#"[package]
 name = "p{id}"
 version = "0.1.0"
@@ -36,10 +57,15 @@ edition = "{edition}"
 [dependencies]
 {dependencies}
 "#
-        )
+        );
+
+        if !extra_cargo.is_empty() {
+            formatted.push_str(&format!("\n{}", extra_cargo));
+        }
+
+        formatted
     }
 
-    // TODO: Build caching system which detects if file changed or not
     pub fn copy(project: &'a mut Project<'b>) -> Result<(), ProjectBuildError> {
         let builder = ProjectBuilder::new(project);
 
