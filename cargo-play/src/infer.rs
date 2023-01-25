@@ -30,6 +30,20 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
         dep.push_str(r#" = "*""#)
     }
 
+    // Process `//> ` as a direct statement to put inside depenencies
+    // Can only appear at beginning of file
+    // stops processing when non ``//> ` is found
+    for file in files {
+        for line in file.code.lines() {
+            if line.starts_with(r#"//> "#) {
+                deps.push(line.replace("//> ", ""));
+                continue;
+            }
+
+            break;
+        }
+    }
+
     Ok(deps.join("\n"))
 }
 
