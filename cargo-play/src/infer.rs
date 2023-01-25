@@ -133,12 +133,11 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
             Item::Impl(_impl) => extract_use(TokenType::Impl(_impl), deps, mod_stmts),
 
             Item::Mod(_mod) => {
-                // only add mod statements such as `mod foo;` with no block body
-                if _mod.content.is_none() && _mod.semi.is_some() {
-                    mod_stmts.push(_mod.ident.to_string());
-                }
+                mod_stmts.push(_mod.ident.to_string());
 
-                extract_use(TokenType::Mod(_mod), deps, mod_stmts)
+                if _mod.content.is_some() {
+                    extract_use(TokenType::Mod(_mod), deps, mod_stmts)
+                }
             }
 
             // Finally found a use statement!
