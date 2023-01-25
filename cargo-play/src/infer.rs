@@ -65,7 +65,7 @@ fn get_use(tree: UseTree, deps: &mut Vec<String>) {
         UseTree::Path(p) => {
             let ident = p.ident.to_string();
 
-            if !USE_KEYWORDS.contains(&&*ident) {
+            if !USE_KEYWORDS.contains(&&*ident) && !deps.contains(&ident) {
                 deps.push(ident);
             }
         }
@@ -73,7 +73,7 @@ fn get_use(tree: UseTree, deps: &mut Vec<String>) {
         UseTree::Name(n) => {
             let ident = n.ident.to_string();
 
-            if !USE_KEYWORDS.contains(&&*ident) {
+            if !USE_KEYWORDS.contains(&&*ident) && !deps.contains(&ident) {
                 deps.push(ident);
             }
         }
@@ -81,7 +81,7 @@ fn get_use(tree: UseTree, deps: &mut Vec<String>) {
         UseTree::Rename(r) => {
             let ident = r.ident.to_string();
 
-            if !USE_KEYWORDS.contains(&&*ident) {
+            if !USE_KEYWORDS.contains(&&*ident) && !deps.contains(&ident) {
                 deps.push(ident);
             }
         }
@@ -89,29 +89,11 @@ fn get_use(tree: UseTree, deps: &mut Vec<String>) {
         UseTree::Group(g) => {
             for i in g.items {
                 match i {
-                    UseTree::Path(p) => {
-                        let ident = p.ident.to_string();
+                    UseTree::Path(p) => get_use(UseTree::Path(p), deps),
 
-                        if !USE_KEYWORDS.contains(&&*ident) {
-                            deps.push(ident);
-                        }
-                    }
+                    UseTree::Name(n) => get_use(UseTree::Name(n), deps),
 
-                    UseTree::Name(n) => {
-                        let ident = n.ident.to_string();
-
-                        if !USE_KEYWORDS.contains(&&*ident) {
-                            deps.push(ident);
-                        }
-                    }
-
-                    UseTree::Rename(r) => {
-                        let ident = r.ident.to_string();
-
-                        if !USE_KEYWORDS.contains(&&*ident) {
-                            deps.push(ident);
-                        }
-                    }
+                    UseTree::Rename(r) => get_use(UseTree::Rename(r), deps),
 
                     UseTree::Group(g) => {
                         for tree in g.items {
