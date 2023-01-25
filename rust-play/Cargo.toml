@@ -6,8 +6,6 @@ license = "MIT"
 authors = ["Cherry"]
 build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [build-dependencies]
 winres = "0.1.12"
 
@@ -22,14 +20,14 @@ lazy_static = "1.4.0"
 windows-dll = "0.4.1"
 smallvec = { version = "1.10.0", features=["const_generics"] }
 serde = "1.0.152"
-toml = "0.5.10"
+toml = "0.6.0"
 reqwest = { version = "0.11.13", features = ["blocking"] }
 thiserror = "1.0.38"
 serde_json = "1.0.91"
 resvg = "0.28.0"
 paste = "1.0.11"
 syntect = "5.0.0"
-cargo-play = { path = "../cargo-play" }
+cargo-player = { path = "../cargo-player" }
 
 [dependencies.windows]
 version = "0.44.0"

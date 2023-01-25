@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "rust-play",
-    "cargo-play"
+    "cargo-player"
 ]
