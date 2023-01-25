@@ -28,8 +28,7 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
         let dependencies = "";
 
         format!(
-            r#"
-[package]
+            r#"[package]
 name = "p{id}"
 version = "0.1.0"
 edition = "{edition}"
