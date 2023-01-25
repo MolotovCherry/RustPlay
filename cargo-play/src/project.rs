@@ -268,56 +268,7 @@ impl<'a> Project<'a> {
         // Make sure you actually put a subcommand in before creating it
         assert!(self.cargo_command_builder.subcommand.is_some());
 
-        // Cargo likes to - for some reason - put toolchain cargo paths first in the PATH
-        // these cargo binaries DO NOT support "+toolchain" format, and we must remove them from PATH
-        // These are set on the main parent and gets inherited in the child process
-        //
-        // The most recognizable part of the paths are:
-        // - they end in lib or bin
-        // - the path has .rustup/toolchains, in it
-        static FIX_PATHS: Once = Once::new();
-        FIX_PATHS.call_once(|| {
-            const ENV_PATH_SEP: &str = if cfg!(target_os = "windows") {
-                ";"
-            } else {
-                ":"
-            };
-
-            let paths = std::env::var("PATH").unwrap_or_default();
-
-            let reconstituted_paths: Vec<String> = paths
-                .split(ENV_PATH_SEP)
-                .filter(|path| {
-                    let path_buffer = PathBuf::from(path);
-                    if !path_buffer.ends_with("lib") && !path_buffer.ends_with("bin") {
-                        true
-                    } else {
-                        let mut ancestors = path_buffer.ancestors();
-                        !ancestors.any(|ancestor_path| {
-                            let ancestor = ancestor_path
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_str()
-                                .unwrap();
-
-                            let ancestor_parent = ancestor_path
-                                .parent()
-                                .unwrap_or_else(|| Path::new(""))
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_str()
-                                .unwrap();
-
-                            ancestor == "toolchains" && ancestor_parent == ".rustup"
-                        })
-                    }
-                })
-                .map(|path| path.to_string())
-                .collect();
-
-            std::env::remove_var("PATH");
-            std::env::set_var("PATH", reconstituted_paths.join(ENV_PATH_SEP));
-        });
+        fix_paths();
 
         let mut command = self.cargo_command_builder.build();
         command.envs(self.env.clone());
@@ -329,4 +280,58 @@ impl<'a> Project<'a> {
 
         Ok(command)
     }
+}
+
+fn fix_paths() {
+    // Cargo likes to - for some reason - put toolchain cargo paths first in the PATH
+    // these cargo binaries DO NOT support "+toolchain" format, and we must remove them from PATH
+    // so we can use the original cargo which supports everything normally.
+    // These are set on the main parent process and gets inherited in the child process
+    //
+    // The most recognizable part of the paths are:
+    // - they end in lib or bin
+    // - the path has .rustup/toolchains, in it
+    static FIX_PATHS: Once = Once::new();
+    FIX_PATHS.call_once(|| {
+        const ENV_PATH_SEP: &str = if cfg!(target_os = "windows") {
+            ";"
+        } else {
+            ":"
+        };
+
+        let paths = std::env::var("PATH").unwrap_or_default();
+
+        let reconstituted_paths: Vec<String> = paths
+            .split(ENV_PATH_SEP)
+            .filter(|path| {
+                let path_buffer = PathBuf::from(path);
+                if path_buffer.ends_with("lib") || path_buffer.ends_with("bin") {
+                    let mut ancestors = path_buffer.ancestors();
+                    return !ancestors.any(|ancestor_path| {
+                        let ancestor = ancestor_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap();
+
+                        let ancestor_parent = ancestor_path
+                            .parent()
+                            .unwrap_or_else(|| Path::new(""))
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap();
+
+                        ancestor == "toolchains" && ancestor_parent == ".rustup"
+                    });
+                }
+
+                true
+            })
+            .map(|path| path.to_string())
+            .collect();
+
+        std::env::remove_var("PATH");
+        std::env::set_var("PATH", reconstituted_paths.join(ENV_PATH_SEP));
+    });
 }

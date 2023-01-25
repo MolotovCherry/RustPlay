@@ -1,7 +1,7 @@
+use crate::infer::infer_deps;
 use crate::Project;
 
 use std::fs;
-use std::path::PathBuf;
 
 use thiserror::Error;
 
@@ -25,7 +25,8 @@ impl<'a, 'b> ProjectBuilder<'a, 'b> {
 
         let edition = self.project.edition;
         let id = self.project.hash;
-        let dependencies = "";
+        let _ = infer_deps(&self.project.files);
+        let dependencies = infer_deps(&self.project.files).unwrap_or_default();
 
         format!(
             r#"[package]
@@ -39,6 +40,7 @@ edition = "{edition}"
         )
     }
 
+    // TODO: Build caching system which detects if file changed or not
     pub fn copy(project: &'a mut Project<'b>) -> Result<(), ProjectBuildError> {
         let builder = ProjectBuilder::new(project);
 
@@ -49,9 +51,7 @@ edition = "{edition}"
 
         let folder_name = format!("{name}.{hash}");
 
-        let target_dir = std::env::var("CARGO_BUILD_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join("rust").join(folder_name));
+        let target_dir = std::env::temp_dir().join("rust").join(folder_name);
 
         // create all directories straight to src
         let target_dir_src = target_dir.join("src");
