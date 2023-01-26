@@ -1,2 +1,2 @@
 # RustPlay
-A desktop program that for playing Rust scratch files
+A desktop program for playing Rust scratch files
