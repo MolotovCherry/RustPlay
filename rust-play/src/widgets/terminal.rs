@@ -105,10 +105,10 @@ impl Terminal {
                             ui.output().cursor_icon = CursorIcon::ResizeVertical;
                         }
 
-                        // we need to subtract 11 from the bottom because that's the closing threashold
+                        // we need to subtract the closing threshold from the bottom
                         let window_bottom = ctx.available_rect().bottom() - 16.0;
 
-                        if response.drag_delta().y <= -1.5
+                        if response.drag_delta().y < 0.0
                             && ctx.pointer_latest_pos().unwrap_or_default().y <= window_bottom
                         {
                             config.terminal.open = true;
