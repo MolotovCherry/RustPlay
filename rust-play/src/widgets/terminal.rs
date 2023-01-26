@@ -32,15 +32,17 @@ impl Terminal {
             .show(ctx, |ui| {
                 let mut close_rect = ctx.available_rect();
 
-                if config.terminal.opened_from_close_dragging {
-                    close_rect.set_top(close_rect.bottom() - 15.0);
+                let close_threshold = if config.terminal.opened_from_close_dragging {
+                    16.0
                 } else {
-                    close_rect.set_top(close_rect.bottom() - 20.0);
+                    20.0
                 };
+
+                close_rect.set_top(close_rect.bottom() - close_threshold);
 
                 let pointer_pos = ctx.pointer_latest_pos().unwrap_or_default();
 
-                let window_close_bottom = ctx.available_rect().bottom() - 15.0;
+                let window_close_bottom = ctx.available_rect().bottom() - close_threshold;
 
                 // when mouse is outside of window, as long as we were dragging, pointer_pos is still Some()
                 // we can utilize this to allow resizing AS LONG AS mouse isn't below the window in screen coords
@@ -106,9 +108,9 @@ impl Terminal {
                         }
 
                         // we need to subtract the closing threshold from the bottom
-                        let window_bottom = ctx.available_rect().bottom() - 16.0;
+                        let window_bottom = ctx.available_rect().bottom() - 17.0;
 
-                        if response.drag_delta().y < 0.0
+                        if response.drag_delta().y <= -0.5
                             && ctx.pointer_latest_pos().unwrap_or_default().y <= window_bottom
                         {
                             config.terminal.open = true;
