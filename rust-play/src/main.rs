@@ -73,6 +73,7 @@ fn main() {
     let options = NativeOptions {
         icon_data: Some(load_app_icon()),
         //min_window_size: Some(Vec2::new(500.0, 400.0)),
+        initial_window_size: Some(Vec2::new(600.0, 400.0)),
         transparent: true,
         resizable: true,
         centered: true,

@@ -71,7 +71,7 @@ impl Dock {
         let mut tab_viewer = TabViewer::new(ctx, &tab_data, active_id);
 
         DockArea::new(tree)
-            .style(style.clone())
+            .style(style)
             .show_inside(ui, &mut tab_viewer);
 
         // add data to command vec

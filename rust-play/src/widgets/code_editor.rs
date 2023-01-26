@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 
 use egui::text::LayoutJob;
-use egui::{vec2, Color32, Id, Layout, Rect, Rounding, Stroke, Vec2};
+use egui::{vec2, Color32, FontSelection, Id, Layout, Rect, Rounding, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 
 /// Memoized Code highlighting
@@ -236,11 +236,52 @@ impl Default for CodeEditor {
     fn default() -> Self {
         Self {
             language: "rs".into(),
-            code: "// A very simple example\n\
-fn main() {\n\
-\tprintln!(\"Hello world!\");\n\
-}\n\
-"
+            code: r#"// How to write scratches
+//
+// Simply write `use some_crate;` anywhere, and the dependency will get
+// inferred and included automatically at the latest version!
+// This creates a simple depdendency requirement like so:
+//     serde = "*"
+//
+// If you have more complex requirements (such as features, or a specific
+// version), at the top of your file, use //# to specify custom
+// dependencies. All //# must be the very first lines in order to be
+// recognized.
+//# serde = { version = "1.0.152", features = ["derive"] }
+//
+// You can also include any extra custom cargo.toml with //>
+// All //> must be in one block, and either at the top of the file or after
+// any //# . Once the last consecutive //> is found,
+// no more //> blocks will work.
+//> [profile.dev]
+//> opt-level = 1
+//
+
+use serde::{Serialize, Deserialize};
+use serde_json;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let point = Point { x: 1, y: 2 };
+
+    // Convert the Point to a JSON string.
+    let serialized = serde_json::to_string(&point).unwrap();
+
+    // Prints serialized = {"x":1,"y":2}
+    println!("serialized = {}", serialized);
+
+    // Convert the JSON string back to a Point.
+    let deserialized: Point = serde_json::from_str(&serialized).unwrap();
+
+    // Prints deserialized = Point { x: 1, y: 2 }
+    println!("deserialized = {:?}", deserialized);
+}
+"#
             .into(),
         }
     }
@@ -273,6 +314,11 @@ impl CodeEditor {
 
         let mut frame_ui = ui.child_ui(code_rect, Layout::default());
 
+        // get how many rows it takes to fill up our max rect
+        let font_id = FontSelection::default().resolve(ui.style());
+        let row_height = ui.fonts().row_height(&font_id);
+        let rows = ((code_rect.height() - 5.0) / row_height).floor() as usize;
+
         let text_widget = egui::TextEdit::multiline(code)
             .font(egui::TextStyle::Monospace) // for cursor height
             .code_editor()
@@ -282,7 +328,8 @@ impl CodeEditor {
             .margin(vec2(2.0, 2.0))
             .layouter(&mut layouter)
             .cursor_at_end(false)
-            .id(id);
+            .id(id)
+            .desired_rows(rows);
 
         let scroll_res = egui::ScrollArea::vertical()
             .scroll_offset(scroll_offset)

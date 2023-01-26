@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
 use egui::{
-    lerp, vec2, CentralPanel, Color32, ColorImage, Context, Frame, Id, Image, Pos2, Rect, Rgba,
-    Sense, Stroke, TextureHandle, Ui,
+    lerp, vec2, CentralPanel, Color32, ColorImage, Context, Frame, Id, Image, LayerId, Pos2, Rect,
+    Rgba, Sense, Stroke, TextureHandle, Ui,
 };
 
 use once_cell::sync::OnceCell;
@@ -48,15 +48,10 @@ pub fn custom_window_frame(
         let mut wp = WINDOWPLACEMENT::default();
         GetWindowPlacement(hwnd, &mut wp);
 
-        if wp.showCmd == SW_MAXIMIZE {
-            true
-        } else {
-            false
-        }
+        wp.showCmd == SW_MAXIMIZE
     };
 
     // Height of the title bar
-    const HEIGHT: f32 = egui_dimens!(TITLEBAR_HEIGHT);
     const CAPT_WIDTH_CLOSE: f32 = egui_dimens!(CAPTION_WIDTH_CLOSE);
     const CAPT_WIDTH_MAXRESTORE: f32 = egui_dimens!(CAPTION_WIDTH_MAXRESTORE);
     const CAPT_WIDTH_MINIMIZE: f32 = egui_dimens!(CAPTION_WIDTH_MINIMIZE);
