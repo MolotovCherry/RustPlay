@@ -1,15 +1,11 @@
 use crate::widgets::dock::{Tree, TreeTabs};
 use egui::Id;
 use egui_dock::NodeIndex;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct DockConfig {
-    #[serde(skip_serializing, skip_deserializing)]
     pub tree: Tree,
-    #[serde(skip_serializing, skip_deserializing)]
     pub commands: Vec<Command>,
-    #[serde(skip_serializing, skip_deserializing)]
     pub counter: u32,
 }
 

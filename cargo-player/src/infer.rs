@@ -1,6 +1,8 @@
 use crate::File;
 
-use syn::{parse_file, Block, Error, ImplItem, Item, ItemFn, ItemImpl, ItemMod, Stmt, UseTree};
+use syn::{
+    parse_file, Block, Error, Expr, ImplItem, Item, ItemFn, ItemImpl, ItemMod, Stmt, UseTree,
+};
 
 const USE_KEYWORDS: &[&str] = &["std", "core", "crate", "self", "alloc", "super"];
 
@@ -174,21 +176,21 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
             Stmt::Item(i) => extract_use(TokenType::Item(i), deps, mod_stmts),
 
             Stmt::Expr(e) | Stmt::Semi(e, _) => match e {
-                syn::Expr::Async(a) => extract_use(TokenType::Block(a.block), deps, mod_stmts),
+                Expr::Async(a) => extract_use(TokenType::Block(a.block), deps, mod_stmts),
 
-                syn::Expr::Block(b) => extract_use(TokenType::Block(b.block), deps, mod_stmts),
+                Expr::Block(b) => extract_use(TokenType::Block(b.block), deps, mod_stmts),
 
-                syn::Expr::Closure(c) => {
+                Expr::Closure(c) => {
                     extract_use(TokenType::Stmt(Stmt::Expr(*c.body)), deps, mod_stmts)
                 }
 
-                syn::Expr::ForLoop(f) => extract_use(TokenType::Block(f.body), deps, mod_stmts),
+                Expr::ForLoop(f) => extract_use(TokenType::Block(f.body), deps, mod_stmts),
 
-                syn::Expr::Group(g) => {
+                Expr::Group(g) => {
                     extract_use(TokenType::Stmt(Stmt::Expr(*g.expr)), deps, mod_stmts)
                 }
 
-                syn::Expr::If(i) => {
+                Expr::If(i) => {
                     extract_use(TokenType::Block(i.then_branch), deps, mod_stmts);
 
                     if i.else_branch.is_some() {
@@ -200,19 +202,19 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
                     }
                 }
 
-                syn::Expr::Loop(l) => extract_use(TokenType::Block(l.body), deps, mod_stmts),
+                Expr::Loop(l) => extract_use(TokenType::Block(l.body), deps, mod_stmts),
 
-                syn::Expr::Match(m) => {
+                Expr::Match(m) => {
                     for arm in m.arms {
                         extract_use(TokenType::Stmt(Stmt::Expr(*arm.body)), deps, mod_stmts);
                     }
                 }
 
-                syn::Expr::TryBlock(t) => extract_use(TokenType::Block(t.block), deps, mod_stmts),
+                Expr::TryBlock(t) => extract_use(TokenType::Block(t.block), deps, mod_stmts),
 
-                syn::Expr::Unsafe(u) => extract_use(TokenType::Block(u.block), deps, mod_stmts),
+                Expr::Unsafe(u) => extract_use(TokenType::Block(u.block), deps, mod_stmts),
 
-                syn::Expr::While(w) => extract_use(TokenType::Block(w.body), deps, mod_stmts),
+                Expr::While(w) => extract_use(TokenType::Block(w.body), deps, mod_stmts),
 
                 _ => (),
             },

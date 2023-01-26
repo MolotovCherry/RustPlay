@@ -29,12 +29,13 @@ use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
 use config::Config;
-use egui::{Rect, Ui};
+use egui::{CentralPanel, Frame, Rect, Ui, Vec2};
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
 use widgets::dock::{Dock, TabEvents};
 
 use eframe::{egui, NativeOptions};
+use widgets::terminal::Terminal;
 use widgets::titlebar::custom_window_frame;
 
 // Each rectangle is an entire tree; not a single tab
@@ -132,6 +133,14 @@ impl App {
     fn handle_tabs(&mut self, ctx: &egui::Context) {
         TabEvents::show(ctx, &mut self.config);
     }
+
+    fn show_terminal(&mut self, ctx: &egui::Context) {
+        Terminal::show(ctx, &mut self.config);
+    }
+
+    fn show_terminal_closed_handle(&mut self, ctx: &egui::Context) {
+        Terminal::show_closed_handle(ctx, &mut self.config);
+    }
 }
 
 impl eframe::App for App {
@@ -155,15 +164,25 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        custom_window_frame(
-            ctx,
-            frame,
-            #[cfg(target_os = "windows")]
-            Rc::clone(&self.tx),
-            |ui| {
+        if self.config.terminal.open {
+            self.show_terminal(ctx);
+        } else {
+            self.show_terminal_closed_handle(ctx);
+        }
+
+        CentralPanel::default()
+            .frame(Frame::none())
+            .show(ctx, |ui| {
+                custom_window_frame(
+                    ctx,
+                    frame,
+                    ui,
+                    #[cfg(target_os = "windows")]
+                    Rc::clone(&self.tx),
+                );
+
                 self.show_dock(ctx, ui);
-            },
-        );
+            });
 
         self.handle_tabs(ctx);
     }

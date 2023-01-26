@@ -40,8 +40,8 @@ macro_rules! egui_dimens {
 pub fn custom_window_frame(
     ctx: &egui::Context,
     frame: &mut eframe::Frame,
+    ui: &mut egui::Ui,
     #[cfg(target_os = "windows")] sender: Rc<Sender<CaptionMaxRect>>,
-    add_contents: impl FnOnce(&mut Ui),
 ) {
     let is_maximized = unsafe {
         let hwnd = GetActiveWindow();
@@ -62,126 +62,113 @@ pub fn custom_window_frame(
     };
     const CAPT_PAD: f32 = egui_dimens!(CAPTION_PADDING);
 
-    CentralPanel::default()
-        .frame(Frame::none())
-        .show(ctx, |ui| {
-            // on windows, when maximized, there's a gap. So if maximized, we should shrunk the maximum rect
-            let rect = if is_maximized {
-                ui.max_rect().shrink(6.5)
+    // on windows, when maximized, there's a gap. So if maximized, we should shrunk the maximum rect
+    let rect = if is_maximized {
+        ui.max_rect().shrink(6.5)
+    } else {
+        ui.max_rect()
+    };
+
+    let painter = ui.painter();
+
+    // Paint the frame:
+    painter.rect(
+        ui.max_rect(),
+        if cfg!(target_os = "windows") {
+            0.0
+        } else {
+            10.0
+        },
+        Color32::TRANSPARENT,
+        // todo: None on windows, something on Linux
+        Stroke::NONE,
+    );
+
+    // Close rect
+    let mut close_rect = rect;
+    close_rect.set_left(rect.right() - CAPT_WIDTH_CLOSE);
+    close_rect.set_bottom(capt_height);
+
+    // Maximize/restore rect
+    let mut maximize_rect = rect;
+    maximize_rect.set_left(close_rect.left() - CAPT_WIDTH_MAXRESTORE - 1.0);
+    maximize_rect.set_right(close_rect.left() - 1.0);
+    maximize_rect.set_bottom(capt_height);
+
+    let _ = sender.send(maximize_rect);
+
+    // minimize rect
+    let mut minimize_rect = rect;
+    minimize_rect.set_left(maximize_rect.left() - CAPT_WIDTH_MINIMIZE - CAPT_PAD);
+    minimize_rect.set_right(maximize_rect.left() - CAPT_PAD);
+    minimize_rect.set_bottom(capt_height);
+
+    // Interact with the title bar (drag to move window):
+    let title_bar_rect = {
+        let mut rect = rect;
+        rect.set_right(minimize_rect.left() + CAPT_PAD);
+        rect.set_bottom(capt_height);
+        rect
+    };
+    let title_bar_response = ui.interact(title_bar_rect, Id::new("title_bar"), Sense::click());
+    if title_bar_response.is_pointer_button_down_on() {
+        frame.drag_window();
+    }
+
+    // Handle caption buttons
+    //
+    // CLOSE BTN
+    //
+    caption_btn(
+        ctx,
+        ui,
+        CaptionIcon::Close,
+        close_rect,
+        Color32::from_rgb(196, 43, 28),
+        Color32::from_rgb(176, 40, 26),
+        "titlebar::close_btn",
+        || {
+            frame.close();
+        },
+    );
+
+    //
+    // MAX/RESTORE BTN
+    //
+    caption_btn(
+        ctx,
+        ui,
+        CaptionIcon::MaximizeRestore,
+        maximize_rect,
+        Color32::from_rgba_unmultiplied(255, 255, 255, 3),
+        Color32::from_rgba_unmultiplied(255, 255, 255, 2),
+        "titlebar::maximize_btn",
+        || unsafe {
+            let hwnd = GetActiveWindow();
+
+            if is_maximized {
+                ShowWindow(hwnd, SW_RESTORE);
             } else {
-                ui.max_rect()
-            };
-
-            let painter = ui.painter();
-
-            // Paint the frame:
-            painter.rect(
-                ui.max_rect(),
-                if cfg!(target_os = "windows") {
-                    0.0
-                } else {
-                    10.0
-                },
-                Color32::TRANSPARENT,
-                // todo: None on windows, something on Linux
-                Stroke::NONE,
-            );
-
-            // Interact with the title bar (drag to move window):
-            let title_bar_rect = {
-                let mut rect = rect;
-                rect.max.y = rect.min.y + HEIGHT;
-                rect
-            };
-            let title_bar_response =
-                ui.interact(title_bar_rect, Id::new("title_bar"), Sense::click());
-            if title_bar_response.is_pointer_button_down_on() {
-                frame.drag_window();
+                ShowWindow(hwnd, SW_MAXIMIZE);
             }
+        },
+    );
 
-            // Close rect
-            let mut close_rect = rect;
-            close_rect.set_left(rect.right() - CAPT_WIDTH_CLOSE);
-            close_rect.set_bottom(capt_height);
-
-            // Maximize/restore rect
-            let mut maximize_rect = rect;
-            maximize_rect.set_left(close_rect.left() - CAPT_WIDTH_MAXRESTORE - 1.0);
-            maximize_rect.set_right(close_rect.left() - 1.0);
-            maximize_rect.set_bottom(capt_height);
-
-            let _ = sender.send(maximize_rect);
-
-            // minimize rect
-            let mut minimize_rect = rect;
-            minimize_rect.set_left(maximize_rect.left() - CAPT_WIDTH_MINIMIZE - CAPT_PAD);
-            minimize_rect.set_right(maximize_rect.left() - CAPT_PAD);
-            minimize_rect.set_bottom(capt_height);
-
-            // Handle caption buttons
-            //
-            // CLOSE BTN
-            //
-            caption_btn(
-                ctx,
-                ui,
-                CaptionIcon::Close,
-                close_rect,
-                Color32::from_rgb(196, 43, 28),
-                Color32::from_rgb(176, 40, 26),
-                "titlebar::close_btn",
-                || {
-                    frame.close();
-                },
-            );
-
-            //
-            // MAX/RESTORE BTN
-            //
-            caption_btn(
-                ctx,
-                ui,
-                CaptionIcon::MaximizeRestore,
-                maximize_rect,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 3),
-                Color32::from_rgba_unmultiplied(255, 255, 255, 2),
-                "titlebar::maximize_btn",
-                || unsafe {
-                    let hwnd = GetActiveWindow();
-
-                    if is_maximized {
-                        ShowWindow(hwnd, SW_RESTORE);
-                    } else {
-                        ShowWindow(hwnd, SW_MAXIMIZE);
-                    }
-                },
-            );
-
-            //
-            // MINIMIZE BTN
-            //
-            caption_btn(
-                ctx,
-                ui,
-                CaptionIcon::Minimize,
-                minimize_rect,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 3),
-                Color32::from_rgba_unmultiplied(255, 255, 255, 2),
-                "titlebar::minimize_btn",
-                || unsafe {
-                    ShowWindow(GetActiveWindow(), SW_MINIMIZE);
-                },
-            );
-
-            // Add the contents:
-            let mut content_ui = ui.child_ui(rect, *ui.layout());
-            let mut clip_rect = rect;
-            clip_rect.set_left(minimize_rect.left() - 10.0);
-            clip_rect.set_bottom(capt_height);
-            content_ui.set_clip_rect(clip_rect);
-
-            add_contents(&mut content_ui);
-        });
+    //
+    // MINIMIZE BTN
+    //
+    caption_btn(
+        ctx,
+        ui,
+        CaptionIcon::Minimize,
+        minimize_rect,
+        Color32::from_rgba_unmultiplied(255, 255, 255, 3),
+        Color32::from_rgba_unmultiplied(255, 255, 255, 2),
+        "titlebar::minimize_btn",
+        || unsafe {
+            ShowWindow(GetActiveWindow(), SW_MINIMIZE);
+        },
+    );
 }
 
 macro_rules! icon {
