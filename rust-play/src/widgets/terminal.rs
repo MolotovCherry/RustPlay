@@ -106,11 +106,10 @@ impl Terminal {
                         }
 
                         // we need to subtract 11 from the bottom because that's the closing threashold
-                        let mut window_rect = ctx.available_rect();
-                        window_rect.set_bottom(window_rect.bottom() - 16.0);
+                        let window_bottom = ctx.available_rect().bottom() - 16.0;
 
                         if response.drag_delta().y <= -1.5
-                            && window_rect.contains(ctx.pointer_latest_pos().unwrap_or_default())
+                            && ctx.pointer_latest_pos().unwrap_or_default().y <= window_bottom
                         {
                             config.terminal.open = true;
                             config.terminal.opened_from_close = true;
