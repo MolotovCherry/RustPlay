@@ -23,3 +23,4 @@ Currently Windows only.
 - Fix caption buttons to clip ui instead of overlay
 - Clearing terminal screen
 - Misc bugs such as properly switching terminal to other tabs terminal output when switching tabs
+- Obvious redesign of all the buttons, including that play button. It looks wrong
