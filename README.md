@@ -19,7 +19,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
 - Nice terminal snapping close / open functionality
-- Infers dependencies through dynamic code analysis
+- Automatically infers dependencies from your `use` statements via dynamic code analysis
 - For more complex needs such as specific versions and crate features, can manually include deps in cargo.toml or even whole sections of cargo.toml code
 
 ![Ui Demo](/readme_assets/ui.gif)
