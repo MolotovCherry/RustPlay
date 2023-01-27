@@ -256,10 +256,6 @@ impl TabEvents {
                     let id = *id;
                     let code = tab.editor.code.clone();
 
-                    // these are used to stream the terminal output
-                    let queue = Arc::new(Mutex::new(String::new()));
-                    let sender_queue = Arc::clone(&queue);
-                    config.terminal.content.insert(id, sender_queue);
                     // this are used as a thread abort signaler
                     let (atx, arx) = channel();
 
@@ -281,6 +277,17 @@ impl TabEvents {
                     ctx.memory()
                         .data
                         .insert_temp::<Aborter>(abort_id, Arc::new(Mutex::new(atx)));
+
+                    // these are used to stream the terminal output
+                    let queue_stdout = Arc::new(Mutex::new(String::new()));
+                    let queue_stderr = Arc::new(Mutex::new(String::new()));
+
+                    let sender_queue_stdout = Arc::clone(&queue_stdout);
+                    let sender_queue_stderr = Arc::clone(&queue_stderr);
+                    config
+                        .terminal
+                        .content
+                        .insert(id, (sender_queue_stdout, sender_queue_stderr));
 
                     let owned_ctx = ctx.clone();
 
@@ -322,14 +329,11 @@ impl TabEvents {
                             let _ = child.kill();
                         });
 
-                        let stdout_sender = queue;
-                        let stderr_sender = Arc::clone(&stdout_sender);
-
                         let stdout_handle = thread::spawn(move || {
                             let stdout_reader = BufReader::new(stdout);
                             for line in stdout_reader.lines() {
                                 if let Ok(line) = line {
-                                    let mut lock = stdout_sender.lock().unwrap();
+                                    let mut lock = queue_stdout.lock().unwrap();
                                     lock.push_str(&line);
                                     lock.push('\n');
                                 } else {
@@ -342,7 +346,7 @@ impl TabEvents {
                             let stderr_reader = BufReader::new(stderr);
                             for line in stderr_reader.lines() {
                                 if let Ok(line) = line {
-                                    let mut lock = stderr_sender.lock().unwrap();
+                                    let mut lock = queue_stderr.lock().unwrap();
                                     lock.push_str(&line);
                                     lock.push('\n');
                                 } else {

@@ -122,17 +122,28 @@ impl Terminal {
                     .unwrap_or(&mut Vec2::default());
 
                 let terminal_output = config.terminal.content.entry(active_tab).or_default();
-                let terminal_output = &*terminal_output.lock().unwrap();
+                let terminal_output_stdout = terminal_output.0.lock().unwrap();
+                let terminal_output_stderr = terminal_output.1.lock().unwrap();
 
-                let mut read_only_term = ReadOnlyString::new(terminal_output);
+                let mut read_only_term_stdout = ReadOnlyString::new(&terminal_output_stdout);
+                let mut read_only_term_stderr = ReadOnlyString::new(&terminal_output_stderr);
 
-                let text_widget = egui::TextEdit::multiline(&mut read_only_term)
+                let text_widget_stdout = egui::TextEdit::multiline(&mut read_only_term_stdout)
                     .font(egui::TextStyle::Monospace) // for cursor height
                     // remove the frame and draw our own
                     .frame(false)
                     .desired_width(f32::INFINITY)
                     //.layouter(&mut layouter)
-                    .id(id.with("term_output"))
+                    .id(id.with("term_output_stdout"))
+                    .interactive(true);
+
+                let text_widget_stderr = egui::TextEdit::multiline(&mut read_only_term_stderr)
+                    .font(egui::TextStyle::Monospace) // for cursor height
+                    // remove the frame and draw our own
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                    //.layouter(&mut layouter)
+                    .id(id.with("term_output_stderr"))
                     .interactive(true);
 
                 let scrollarea = egui::ScrollArea::vertical()
@@ -141,7 +152,19 @@ impl Terminal {
                     .scroll_offset(offset)
                     .stick_to_bottom(true)
                     .show(ui, |ui| {
-                        ui.add(text_widget);
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.heading("Standard Error");
+                                ui.add(text_widget_stderr);
+                            });
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.heading("Standard Output");
+                                ui.add(text_widget_stdout);
+                            });
+                        });
                     });
 
                 config

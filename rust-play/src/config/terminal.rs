@@ -4,10 +4,13 @@ use std::sync::{Arc, Mutex};
 
 use egui::Id;
 
+pub type TermOutput = Arc<Mutex<String>>;
+
 #[derive(Debug, Default)]
 pub struct Terminal {
     // the arc mutex string holds access to the terminal buffer
-    pub content: HashMap<Id, Arc<Mutex<String>>>,
+    // first is stdout, second is stderr
+    pub content: HashMap<Id, (TermOutput, TermOutput)>,
     // the first Id is simply the tab id, the second is the abort ctx tmp Id
     //
     // this holds access to an abort process signal in ctx tmp memory
