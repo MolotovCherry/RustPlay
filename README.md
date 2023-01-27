@@ -4,6 +4,15 @@ A desktop program for playing Rust scratch files
 This program is currently alpha, but has a basic working terminal and compiles and runs rust scratches.  
 Currently Windows only.
 
+### But why?
+I got tired of having to go to play.rust-lang.org. I just want something I can use on my own, without limit. Something I don't need a browser for.
+
+I am also the author of an IntelliJ rust scratch plugin, but it was too cumbersome to continue with all of their api changes. But now - now with a desktop app, there are no limits!
+
+## Requirements
+- You need to have Rust / cargo installed of course :wink:
+- You use windows (Linux support will come in time)
+
 ## Current Features
 - Windows support
 - Nice titlebar with tabs integrated into decoration
@@ -26,3 +35,6 @@ Currently Windows only.
 - Clearing terminal screen
 - Misc bugs such as properly switching terminal to other tabs terminal output when switching tabs
 - Obvious redesign of all the buttons, including that play button. It looks wrong
+
+## Contributions
+All contributions are welcome! Let's make this the best Rust Scratch app ever!
