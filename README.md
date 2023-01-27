@@ -40,7 +40,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Fix/improve svg caption button icons. They don't seem to look the same in 1080p
 - Panic popup window Linux support (not sure how)
 - Potential multi-file module project builds (`cargo-player` does support this)
-- Cleanup T
+- Cleanup old textedit state (tabs with the same node/tabindex use the same id hashes, and textedit state is persisted and not cleared when closing tabs)
 
 ## Contributions
 All contributions are welcome!
