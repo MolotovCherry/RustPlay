@@ -11,6 +11,8 @@ Currently Windows only.
 - Can play scratches (very basic functionality currently)
 - Nice terminal snapping close / open functionality
 
+![Ui Demo](/readme_assets/ui.gif)
+
 ## Next Goals
 - Theming with config
 - Linux Support
