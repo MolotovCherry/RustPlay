@@ -122,16 +122,7 @@ impl Terminal {
                     .unwrap_or(&mut Vec2::default());
 
                 let terminal_output = config.terminal.content.entry(active_tab).or_default();
-                let stream = config.terminal.streamable.get_mut(&active_tab);
-                if let Some((rx, _)) = stream {
-                    if let Ok(output) = rx.try_recv() {
-                        terminal_output.push_str(&output);
-                        terminal_output.push('\n');
-
-                        // as long as there's something more in the queue, keep requesting repaints
-                        ctx.request_repaint();
-                    }
-                }
+                let terminal_output = &*terminal_output.lock().unwrap();
 
                 let mut read_only_term = ReadOnlyString::new(terminal_output);
 

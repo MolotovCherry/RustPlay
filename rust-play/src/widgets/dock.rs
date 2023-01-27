@@ -1,12 +1,11 @@
 use rand::Rng;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
-use std::sync::mpsc::{channel, sync_channel, Sender};
-use std::sync::Arc;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use cargo_player::{BuildType, Channel, Edition, File, Project, Subcommand};
-use egui::mutex::Mutex;
 use egui::{vec2, Align2, Color32, Id, Ui, Vec2, Window};
 use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign};
 use serde::{Deserialize, Serialize};
@@ -258,7 +257,9 @@ impl TabEvents {
                     let code = tab.editor.code.clone();
 
                     // these are used to stream the terminal output
-                    let (tx, rx) = sync_channel(1000);
+                    let queue = Arc::new(Mutex::new(String::new()));
+                    let sender_queue = Arc::clone(&queue);
+                    config.terminal.content.insert(id, sender_queue);
                     // this are used as a thread abort signaler
                     let (atx, arx) = channel();
 
@@ -266,10 +267,11 @@ impl TabEvents {
                     let abort_rid: u64 = rng.gen();
 
                     let abort_id = id.with(format!("_thread_aborter_{abort_rid}"));
-                    let prev = config.terminal.streamable.insert(id, (rx, abort_id));
+
+                    let prev = config.terminal.abortable.insert(id, abort_id);
                     // if there's a previous process running, send the signal abort
                     type Aborter = Arc<Mutex<Sender<()>>>;
-                    if let Some((_, atx)) = prev {
+                    if let Some(atx) = prev {
                         let mut mem = ctx.memory();
                         if mem.data.get_temp::<Aborter>(atx).is_some() {
                             mem.data.remove::<Aborter>(atx);
@@ -310,10 +312,6 @@ impl TabEvents {
                             .spawn()
                             .unwrap();
 
-                        let tx = Arc::new(tx);
-                        let stdout_tx = Arc::clone(&tx);
-                        let stderr_tx = Arc::clone(&tx);
-
                         let stdout = child.stdout.take().unwrap();
                         let stderr = child.stderr.take().unwrap();
 
@@ -324,11 +322,16 @@ impl TabEvents {
                             let _ = child.kill();
                         });
 
+                        let stdout_sender = queue;
+                        let stderr_sender = Arc::clone(&stdout_sender);
+
                         let stdout_handle = thread::spawn(move || {
                             let stdout_reader = BufReader::new(stdout);
                             for line in stdout_reader.lines() {
                                 if let Ok(line) = line {
-                                    let _ = stdout_tx.send(line);
+                                    let mut lock = stdout_sender.lock().unwrap();
+                                    lock.push_str(&line);
+                                    lock.push('\n');
                                 } else {
                                     panic!("Unable to send line {line:?}");
                                 }
@@ -339,7 +342,9 @@ impl TabEvents {
                             let stderr_reader = BufReader::new(stderr);
                             for line in stderr_reader.lines() {
                                 if let Ok(line) = line {
-                                    let _ = stderr_tx.send(line);
+                                    let mut lock = stderr_sender.lock().unwrap();
+                                    lock.push_str(&line);
+                                    lock.push('\n');
                                 } else {
                                     panic!("Unable to send line {line:?}");
                                 }

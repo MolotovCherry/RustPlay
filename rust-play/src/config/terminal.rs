@@ -1,15 +1,19 @@
 use egui::Vec2;
 use std::collections::HashMap;
-use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use egui::Id;
 
 #[derive(Debug, Default)]
 pub struct Terminal {
-    pub content: HashMap<Id, String>,
-    // receiver is reponsible for streaming the data from the subprocess to the terminal
-    // The second ID is stored in ctx, which is used to terminate running processes
-    pub streamable: HashMap<Id, (Receiver<String>, Id)>,
+    // the arc mutex string holds access to the terminal buffer
+    pub content: HashMap<Id, Arc<Mutex<String>>>,
+    // the first Id is simply the tab id, the second is the abort ctx tmp Id
+    //
+    // this holds access to an abort process signal in ctx tmp memory
+    // just remove the tmp ctx entry to drop it
+    // the entry is type Arc<Mutex<Sender<()>>>
+    pub abortable: HashMap<Id, Id>,
     pub open: bool,
     pub scroll_offset: HashMap<Id, Vec2>,
     pub active_tab: Option<Id>,
