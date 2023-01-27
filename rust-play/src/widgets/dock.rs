@@ -1,11 +1,12 @@
+use rand::Rng;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{channel, sync_channel, Sender};
 use std::sync::Arc;
 use std::thread;
 
 use cargo_player::{BuildType, Channel, Edition, File, Project, Subcommand};
+use egui::mutex::Mutex;
 use egui::{vec2, Align2, Color32, Id, Ui, Vec2, Window};
 use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign};
 use serde::{Deserialize, Serialize};
@@ -259,13 +260,25 @@ impl TabEvents {
                     // these are used to stream the terminal output
                     let (tx, rx) = sync_channel(1000);
                     // this are used as a thread abort signaler
-                    let atx = Arc::new(AtomicBool::new(false));
-                    let tatx = Arc::clone(&atx);
-                    let prev = config.terminal.streamable.insert(id, (rx, atx));
+                    let (atx, arx) = channel();
+
+                    let mut rng = rand::thread_rng();
+                    let abort_rid: u64 = rng.gen();
+
+                    let abort_id = id.with(format!("_thread_aborter_{abort_rid}"));
+                    let prev = config.terminal.streamable.insert(id, (rx, abort_id));
                     // if there's a previous process running, send the signal abort
+                    type Aborter = Arc<Mutex<Sender<()>>>;
                     if let Some((_, atx)) = prev {
-                        atx.store(true, Ordering::Relaxed);
+                        let mut mem = ctx.memory();
+                        if mem.data.get_temp::<Aborter>(atx).is_some() {
+                            mem.data.remove::<Aborter>(atx);
+                        }
                     }
+
+                    ctx.memory()
+                        .data
+                        .insert_temp::<Aborter>(abort_id, Arc::new(Mutex::new(atx)));
 
                     let owned_ctx = ctx.clone();
 
@@ -291,20 +304,25 @@ impl TabEvents {
                             .create()
                             .expect("Oh no");
 
-                        let child = command
+                        let mut child = command
                             .stderr(Stdio::piped())
                             .stdout(Stdio::piped())
                             .spawn()
                             .unwrap();
-                        let stdout = child.stdout.expect("Failed to open stdout");
-                        let stderr = child.stderr.expect("Failed to open stdout");
 
                         let tx = Arc::new(tx);
                         let stdout_tx = Arc::clone(&tx);
                         let stderr_tx = Arc::clone(&tx);
 
-                        let stdout_atx = Arc::clone(&tatx);
-                        let stderr_atx = Arc::clone(&tatx);
+                        let stdout = child.stdout.take().unwrap();
+                        let stderr = child.stderr.take().unwrap();
+
+                        // special thread which checks for abort code
+                        thread::spawn(move || {
+                            // blocking wait for abort
+                            let _ = arx.recv();
+                            let _ = child.kill();
+                        });
 
                         let stdout_handle = thread::spawn(move || {
                             let stdout_reader = BufReader::new(stdout);
@@ -313,12 +331,6 @@ impl TabEvents {
                                     let _ = stdout_tx.send(line);
                                 } else {
                                     panic!("Unable to send line {line:?}");
-                                }
-
-                                // abort reading if we receive signal
-                                let abort = stdout_atx.load(Ordering::Relaxed);
-                                if abort {
-                                    break;
                                 }
                             }
                         });
@@ -331,12 +343,6 @@ impl TabEvents {
                                 } else {
                                     panic!("Unable to send line {line:?}");
                                 }
-
-                                // abort reading if we receive signal
-                                let abort = stderr_atx.load(Ordering::Relaxed);
-                                if abort {
-                                    break;
-                                }
                             }
                         });
 
@@ -348,6 +354,11 @@ impl TabEvents {
                         let mut mem = ctx.memory();
                         let counter = mem.data.get_temp_mut_or_default::<u64>(id);
                         *counter -= 1;
+
+                        let aborter = mem.data.get_temp::<Aborter>(abort_id);
+                        if aborter.is_some() {
+                            mem.data.remove::<Aborter>(abort_id);
+                        }
                     });
 
                     false
