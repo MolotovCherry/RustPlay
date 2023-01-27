@@ -37,6 +37,9 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Obvious redesign of all the buttons, including that play button. It looks wrong
 - Potential caching of files / inference / cargo.toml in order to speed up runs.
 - [Line numbers in code editor](https://github.com/emilk/egui/issues/1534)
+- Fix/improve svg caption button icons. They don't seem to look the same in 1080p
+- Panic popup window Linux support (not sure how)
+- Potential multi-file module project builds (`cargo-player` does support this)
 
 ## Contributions
 All contributions are welcome!
