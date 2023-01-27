@@ -257,29 +257,18 @@ impl Default for CodeEditor {
 //> opt-level = 1
 //
 
-use serde::{Serialize, Deserialize};
-use serde_json;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Point {
-    x: i32,
-    y: i32,
-}
+use rand::Rng;
 
 fn main() {
-    let point = Point { x: 1, y: 2 };
+    let mut rng = rand::thread_rng();
 
-    // Convert the Point to a JSON string.
-    let serialized = serde_json::to_string(&point).unwrap();
-
-    // Prints serialized = {"x":1,"y":2}
-    println!("serialized = {}", serialized);
-
-    // Convert the JSON string back to a Point.
-    let deserialized: Point = serde_json::from_str(&serialized).unwrap();
-
-    // Prints deserialized = Point { x: 1, y: 2 }
-    println!("deserialized = {:?}", deserialized);
+    let n1: u8 = rng.gen();
+    let n2: u16 = rng.gen();
+    println!("Random u8: {}", n1);
+    println!("Random u16: {}", n2);
+    println!("Random u32: {}", rng.gen::<u32>());
+    println!("Random i32: {}", rng.gen::<i32>());
+    println!("Random float: {}", rng.gen::<f64>());
 }
 "#
             .into(),
