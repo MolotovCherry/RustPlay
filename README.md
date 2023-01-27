@@ -37,4 +37,8 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Obvious redesign of all the buttons, including that play button. It looks wrong
 
 ## Contributions
-All contributions are welcome! Let's make this the best Rust Scratch app ever!
+All contributions are welcome!
+
+If you'd like to contribute, please choose a goal above! :smile: If you need help, please head over to the discussions section of the project
+
+Let's make this the best Rust Scratch app ever!
