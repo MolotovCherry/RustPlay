@@ -130,15 +130,15 @@ fn get_use(tree: UseTree, deps: &mut Vec<String>) {
 fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<String>) {
     match item {
         TokenType::Item(i) => match i {
-            Item::Fn(_fn) => extract_use(TokenType::Fn(_fn), deps, mod_stmts),
+            Item::Fn(f) => extract_use(TokenType::Fn(f), deps, mod_stmts),
 
-            Item::Impl(_impl) => extract_use(TokenType::Impl(_impl), deps, mod_stmts),
+            Item::Impl(i) => extract_use(TokenType::Impl(i), deps, mod_stmts),
 
-            Item::Mod(_mod) => {
-                mod_stmts.push(_mod.ident.to_string());
+            Item::Mod(m) => {
+                mod_stmts.push(m.ident.to_string());
 
-                if _mod.content.is_some() {
-                    extract_use(TokenType::Mod(_mod), deps, mod_stmts)
+                if m.content.is_some() {
+                    extract_use(TokenType::Mod(m), deps, mod_stmts)
                 }
             }
 
@@ -148,18 +148,18 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
             _ => (),
         },
 
-        TokenType::Fn(_fn) => extract_use(TokenType::Block(*_fn.block), deps, mod_stmts),
+        TokenType::Fn(f) => extract_use(TokenType::Block(*f.block), deps, mod_stmts),
 
-        TokenType::Impl(_impl) => {
-            for item in _impl.items {
+        TokenType::Impl(i) => {
+            for item in i.items {
                 if let ImplItem::Method(method) = item {
                     extract_use(TokenType::Block(method.block), deps, mod_stmts);
                 }
             }
         }
 
-        TokenType::Mod(_mod) => {
-            if let Some((_, items)) = _mod.content {
+        TokenType::Mod(m) => {
+            if let Some((_, items)) = m.content {
                 for item in items {
                     extract_use(TokenType::Item(item), deps, mod_stmts);
                 }
