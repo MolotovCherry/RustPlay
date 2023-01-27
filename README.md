@@ -15,7 +15,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 
 ## Current Features
 - Windows support
-- Nice titlebar with tabs integrated into decoration
+- Nice titlebar with tabs integrated into decoration WITH windows acrylic support (win11 only)
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
 - Nice terminal snapping close / open functionality
