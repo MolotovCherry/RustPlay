@@ -10,6 +10,8 @@ Currently Windows only.
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
 - Nice terminal snapping close / open functionality
+- Infers dependencies through dynamic code analysis
+- For more complex needs such as specific versions and crate features, can manually include deps in cargo.toml or even whole sections of cargo.toml code
 
 ![Ui Demo](/readme_assets/ui.gif)
 
