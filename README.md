@@ -36,6 +36,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Misc bugs such as properly switching terminal to other tabs terminal output when switching tabs
 - Obvious redesign of all the buttons, including that play button. It looks wrong
 - Potential caching of files / inference / cargo.toml in order to speed up runs.
+- [Line numbers in code editor](https://github.com/emilk/egui/issues/1534)
 
 ## Contributions
 All contributions are welcome!
