@@ -229,7 +229,7 @@ fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CodeEditor {
     language: String,
-    code: String,
+    pub code: String,
 }
 
 impl Default for CodeEditor {
@@ -337,10 +337,10 @@ impl CodeEditor {
                 ui.add(text_widget);
             });
 
-        let mut memory = ui.memory();
-        if !memory.has_focus(id) && focused {
-            memory.request_focus(id);
-        }
+        // let mut memory = ui.memory();
+        // if !memory.has_focus(id) && focused {
+        //     memory.request_focus(id);
+        // }
 
         scroll_res.state.offset
     }

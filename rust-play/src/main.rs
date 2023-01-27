@@ -29,7 +29,7 @@ use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
 use config::Config;
-use egui::{CentralPanel, Frame, Rect, Ui, Vec2};
+use egui::{CentralPanel, Frame, Id, Rect, Ui, Vec2};
 use panic::set_hook;
 use popup::{display_popup, MessageBoxIcon};
 use widgets::dock::{Dock, TabEvents};
@@ -109,6 +109,13 @@ impl App {
             Config::default()
         };
 
+        // initialize the terminal data
+        config.terminal.active_tab = Some(config.dock.tree.find_active().unwrap().1.id);
+        config.terminal.scroll_offset.insert(
+            config.dock.tree.find_active().unwrap().1.id,
+            Vec2::default(),
+        );
+
         config.dock.counter = 2;
 
         let app = Self {
@@ -185,5 +192,16 @@ impl eframe::App for App {
             });
 
         self.handle_tabs(ctx);
+
+        let counter = ctx
+            .memory()
+            .data
+            .get_temp::<u64>(Id::new("continuous_mode"))
+            .unwrap_or_default();
+
+        // if we still have a requested continuous mode update, then request more frames
+        if counter > 0 {
+            ctx.request_repaint();
+        }
     }
 }

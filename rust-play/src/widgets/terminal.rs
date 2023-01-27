@@ -1,9 +1,40 @@
 use egui::panel::PanelState;
-use egui::{pos2, vec2, CursorIcon, Id, Rect, Sense};
+use egui::{pos2, vec2, CursorIcon, Id, Rect, Sense, TextBuffer, Vec2};
 
 use crate::config::Config;
 
 use super::titlebar::TITLEBAR_HEIGHT;
+
+// A read only string for multiline textedit
+struct ReadOnlyString<'a> {
+    content: &'a str,
+}
+
+impl<'a> TextBuffer for ReadOnlyString<'a> {
+    fn is_mutable(&self) -> bool {
+        false
+    }
+
+    fn as_str(&self) -> &str {
+        self.content
+    }
+
+    fn insert_text(&mut self, _: &str, _: usize) -> usize {
+        0
+    }
+
+    fn delete_char_range(&mut self, _: std::ops::Range<usize>) {}
+
+    fn clear(&mut self) {}
+
+    fn replace(&mut self, _: &str) {}
+}
+
+impl<'a> ReadOnlyString<'a> {
+    fn new(content: &'a str) -> Self {
+        Self { content }
+    }
+}
 
 pub struct Terminal;
 
@@ -29,7 +60,12 @@ impl Terminal {
             .default_height(0.0)
             .min_height(0.0)
             .max_height(ctx.available_rect().height() - (TITLEBAR_HEIGHT as f32 / 2.0))
+            .show_separator_line(false)
             .show(ctx, |ui| {
+                //
+                // Panel handling code
+                //
+
                 let mut close_rect = ctx.available_rect();
 
                 let close_threshold = if config.terminal.opened_from_close_dragging {
@@ -44,14 +80,17 @@ impl Terminal {
 
                 let window_close_bottom = ctx.available_rect().bottom() - close_threshold;
 
+                let resize_id = id.with("__resize");
+
                 // when mouse is outside of window, as long as we were dragging, pointer_pos is still Some()
                 // we can utilize this to allow resizing AS LONG AS mouse isn't below the window in screen coords
-                if close_rect.contains(pointer_pos) || pointer_pos.y >= window_close_bottom {
+                if (close_rect.contains(pointer_pos) || pointer_pos.y >= window_close_bottom)
+                    && ctx.memory().is_being_dragged(resize_id)
+                {
                     config.terminal.open = false;
                     config.terminal.closed_from_open = true;
                 }
 
-                let resize_id = id.with("__resize");
                 if config.terminal.opened_from_close {
                     let mut memory = ui.memory();
                     memory.set_dragged_id(resize_id);
@@ -65,14 +104,59 @@ impl Terminal {
                     config.terminal.opened_from_close_dragging = false;
                 }
 
-                egui::ScrollArea::vertical()
+                //
+                // Scrollbar and panel contents
+                //
+
+                let mut frame_rect = ui.max_rect();
+                frame_rect.set_left(frame_rect.left() + 2.0);
+                frame_rect.set_right(frame_rect.right() - 2.0);
+                frame_rect.set_bottom(frame_rect.bottom() - 10.0);
+                frame_rect.set_top(frame_rect.top() + 10.0);
+
+                let active_tab = config.terminal.active_tab.unwrap();
+                let offset = *config
+                    .terminal
+                    .scroll_offset
+                    .get_mut(&active_tab)
+                    .unwrap_or(&mut Vec2::default());
+
+                let terminal_output = config.terminal.content.entry(active_tab).or_default();
+                let stream = config.terminal.streamable.get_mut(&active_tab);
+                if let Some((rx, _)) = stream {
+                    if let Ok(output) = rx.try_recv() {
+                        terminal_output.push_str(&output);
+                        terminal_output.push('\n');
+
+                        // as long as there's something more in the queue, keep requesting repaints
+                        ctx.request_repaint();
+                    }
+                }
+
+                let mut read_only_term = ReadOnlyString::new(terminal_output);
+
+                let text_widget = egui::TextEdit::multiline(&mut read_only_term)
+                    .font(egui::TextStyle::Monospace) // for cursor height
+                    // remove the frame and draw our own
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                    //.layouter(&mut layouter)
+                    .id(id.with("term_output"))
+                    .interactive(true);
+
+                let scrollarea = egui::ScrollArea::vertical()
                     .max_height(f32::INFINITY)
                     .auto_shrink([false, false])
+                    .scroll_offset(offset)
+                    .stick_to_bottom(true)
                     .show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.heading("Expandable Upper Panel");
-                        });
+                        ui.add(text_widget);
                     });
+
+                config
+                    .terminal
+                    .scroll_offset
+                    .insert(active_tab, scrollarea.state.offset);
             });
     }
 

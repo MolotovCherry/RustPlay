@@ -36,4 +36,5 @@ pub enum MenuCommand {
 pub enum TabCommand {
     Add(NodeIndex),
     Close(Id),
+    Play(Id),
 }

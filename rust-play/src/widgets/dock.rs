@@ -1,6 +1,13 @@
-use egui::text_edit::TextEditState;
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
+use std::thread;
+
+use cargo_player::{BuildType, Channel, Edition, File, Project, Subcommand};
 use egui::{vec2, Align2, Color32, Id, Ui, Vec2, Window};
-use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign, TabIndex};
+use egui_dock::{DockArea, Node, NodeIndex, Style, TabAddAlign};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
@@ -14,9 +21,9 @@ pub type Tree = egui_dock::Tree<Tab>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tab {
-    name: String,
-    editor: CodeEditor,
-    id: Id,
+    pub name: String,
+    pub editor: CodeEditor,
+    pub id: Id,
     scroll_offset: Option<Vec2>,
 }
 
@@ -105,12 +112,21 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         // multiple tabs may be open on the screen, so we need to know if one is focused or not so we don't steal focus
-        tab.scroll_offset = Some(tab.editor.show(
-            tab.id.with("code_editor"),
-            ui,
-            tab.scroll_offset.unwrap_or_default(),
-            tab.id == self.focused_tab,
-        ));
+        ui.horizontal(|ui| {
+            if ui.button("Play").clicked() {
+                let mut data = self.data.borrow_mut();
+                data.push(Command::TabCommand(TabCommand::Play(tab.id)));
+            }
+        });
+
+        ui.vertical_centered(|ui| {
+            tab.scroll_offset = Some(tab.editor.show(
+                tab.id.with("code_editor"),
+                ui,
+                tab.scroll_offset.unwrap_or_default(),
+                tab.id == self.focused_tab,
+            ));
+        });
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
@@ -217,6 +233,122 @@ impl TabEvents {
 
                         config.dock.counter = 2;
                     }
+
+                    false
+                }
+
+                TabCommand::Play(id) => {
+                    let tab = &mut config
+                        .dock
+                        .tree
+                        .iter_mut()
+                        .filter_map(|node| {
+                            let Node::Leaf { tabs, .. } = node else {
+                                return None;
+                            };
+
+                            tabs.iter_mut().find(|tab| tab.id == *id)
+                        })
+                        .collect::<SmallVec<[&mut Tab; 1]>>()[0];
+
+                    config.terminal.active_tab = Some(*id);
+
+                    let id = *id;
+                    let code = tab.editor.code.clone();
+
+                    // these are used to stream the terminal output
+                    let (tx, rx) = sync_channel(1000);
+                    // this are used as a thread abort signaler
+                    let atx = Arc::new(AtomicBool::new(false));
+                    let tatx = Arc::clone(&atx);
+                    let prev = config.terminal.streamable.insert(id, (rx, atx));
+                    // if there's a previous process running, send the signal abort
+                    if let Some((_, atx)) = prev {
+                        atx.store(true, Ordering::Relaxed);
+                    }
+
+                    let owned_ctx = ctx.clone();
+
+                    thread::spawn(move || {
+                        let id = Id::new("continuous_mode");
+
+                        let ctx = owned_ctx;
+
+                        // a counter used to indicate when continuous mode is on. It is on as long as any threads are still running
+                        {
+                            let mut mem = ctx.memory();
+                            let counter = mem.data.get_temp_mut_or_default::<u64>(id);
+                            *counter += 1;
+                        }
+
+                        let mut command = Project::new(id)
+                            .build_type(BuildType::Debug)
+                            .channel(Channel::Stable)
+                            .file(File::new("main", &code))
+                            .edition(Edition::E2021)
+                            .subcommand(Subcommand::Run)
+                            .target_prefix("rust-play")
+                            .create()
+                            .expect("Oh no");
+
+                        let child = command
+                            .stderr(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .unwrap();
+                        let stdout = child.stdout.expect("Failed to open stdout");
+                        let stderr = child.stderr.expect("Failed to open stdout");
+
+                        let tx = Arc::new(tx);
+                        let stdout_tx = Arc::clone(&tx);
+                        let stderr_tx = Arc::clone(&tx);
+
+                        let stdout_atx = Arc::clone(&tatx);
+                        let stderr_atx = Arc::clone(&tatx);
+
+                        let stdout_handle = thread::spawn(move || {
+                            let stdout_reader = BufReader::new(stdout);
+                            for line in stdout_reader.lines() {
+                                if let Ok(line) = line {
+                                    let _ = stdout_tx.send(line);
+                                } else {
+                                    panic!("Unable to send line {line:?}");
+                                }
+
+                                // abort reading if we receive signal
+                                let abort = stdout_atx.load(Ordering::Relaxed);
+                                if abort {
+                                    break;
+                                }
+                            }
+                        });
+
+                        let stderr_handle = thread::spawn(move || {
+                            let stderr_reader = BufReader::new(stderr);
+                            for line in stderr_reader.lines() {
+                                if let Ok(line) = line {
+                                    let _ = stderr_tx.send(line);
+                                } else {
+                                    panic!("Unable to send line {line:?}");
+                                }
+
+                                // abort reading if we receive signal
+                                let abort = stderr_atx.load(Ordering::Relaxed);
+                                if abort {
+                                    break;
+                                }
+                            }
+                        });
+
+                        // kick off the repaints
+                        ctx.request_repaint();
+                        let _ = stdout_handle.join();
+                        let _ = stderr_handle.join();
+
+                        let mut mem = ctx.memory();
+                        let counter = mem.data.get_temp_mut_or_default::<u64>(id);
+                        *counter -= 1;
+                    });
 
                     false
                 }
