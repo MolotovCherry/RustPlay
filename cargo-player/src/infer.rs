@@ -234,7 +234,395 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
                 _ => (),
             },
 
-            _ => (),
+            Stmt::Local(l) => {
+                if let Some((_, e)) = l.init {
+                    extract_use(TokenType::Stmt(Stmt::Expr(*e)), deps, mod_stmts)
+                }
+            }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! try_extract_use {
+        ($use_eq:expr, $mod_eq: expr, $code:literal) => {
+            let mut deps = vec![];
+            let mut mods = vec![];
+
+            let items = parse_file($code).unwrap().items;
+            for item in items {
+                extract_use(TokenType::Item(item), &mut deps, &mut mods);
+            }
+
+            assert_eq!($use_eq as &[&str], &*deps);
+            assert_eq!($mod_eq as &[&str], &*mods);
+        };
+    }
+
+    //
+    // Top Level
+    //
+
+    #[test]
+    fn extract_use_top_level() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use some_lib;
+use second_lib;
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_level_with_path() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use some_lib::foobar::Baz;
+use second_lib::boobaz;
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_level_with_group() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use some_lib::{
+    Bammm
+};
+use second_lib::boobaz::{
+    bamboozle
+};
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_level_rename() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use some_lib::bar as baz;
+use second_lib::boobaz::bamboozle as haha;
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_fn() {
+        try_extract_use!(
+            &["nice", "haha"],
+            &["bam"],
+            r#"
+fn foobar() {
+    use nice;
+
+    mod bam {
+        use haha;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Top Level with Use Block
+    //
+
+    #[test]
+    fn extract_use_top_level_use_block() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use {
+    some_lib,
+    second_lib
+};
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_level_use_block_with_path() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use {
+    some_lib::foobar::Baz,
+    second_lib::boobaz
+};
+            "#
+        );
+    }
+
+    #[test]
+    fn extract_use_top_level_use_block_with_group() {
+        try_extract_use!(
+            &["some_lib", "second_lib"],
+            &[],
+            r#"
+use {
+    some_lib::foobar::Baz::{
+        Bammm
+    },
+    second_lib::boobaz::{
+        Booze
+    }
+};
+            "#
+        );
+    }
+
+    //
+    // Mod Statement
+    //
+
+    #[test]
+    fn extract_use_mod_top_level() {
+        try_extract_use!(
+            &["some_lib", "second_lib", "bar"],
+            &["foo", "baz"],
+            r#"
+mod foo {
+    use some_lib;
+    use second_lib;
+}
+
+mod baz {
+    use bar;
+}
+            "#
+        );
+    }
+
+    //
+    // Impl
+    //
+    #[test]
+    fn extract_use_impl() {
+        try_extract_use!(
+            &["baz", "impl_boo", "foobam"],
+            &[],
+            r#"
+struct Foo;
+impl Foo {
+    fn bar() {
+        use baz;
+        use impl_boo;
+    }
+
+    fn bam() {
+        use foobam;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // If / else
+    //
+    #[test]
+    fn extract_use_if_else() {
+        try_extract_use!(
+            &["haha", "nice"],
+            &[],
+            r#"
+fn foobar() {
+    if true {
+        use haha;
+    } else {
+        use nice;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Closure
+    //
+    #[test]
+    fn extract_use_closure() {
+        try_extract_use!(
+            &["closure_test", "closure_2"],
+            &[],
+            r#"
+fn foobar() {
+    let b = || {
+        use closure_test;
+    };
+
+    || {
+        use closure_2;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Block
+    //
+    #[test]
+    fn extract_use_block() {
+        try_extract_use!(
+            &["block"],
+            &[],
+            r#"
+fn foobar() {
+    {
+        use block;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Async Block
+    //
+    #[test]
+    fn extract_use_async_block() {
+        try_extract_use!(
+            &["async_block"],
+            &[],
+            r#"
+fn foobar() {
+    async {
+        use async_block;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // For Loop
+    //
+    #[test]
+    fn extract_use_for_loop() {
+        try_extract_use!(
+            &["a_bus"],
+            &[],
+            r#"
+fn foobar() {
+    for i in 0..5 {
+        use a_bus;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Loop
+    //
+    #[test]
+    fn extract_use_loop() {
+        try_extract_use!(
+            &["a_car"],
+            &[],
+            r#"
+fn foobar() {
+    loop {
+        use a_car;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Match
+    //
+    #[test]
+    fn extract_use_match() {
+        try_extract_use!(
+            &["arm", "wrestling"],
+            &[],
+            r#"
+fn foobar() {
+    let a = 0;
+    match a {
+        0 => {
+            use arm;
+        }
+
+        1 => {
+            use wrestling;
+        }
+
+        _ => ()
+    };
+}
+            "#
+        );
+    }
+
+    //
+    // While
+    //
+    #[test]
+    fn extract_use_while() {
+        try_extract_use!(
+            &["it_goes_on_and_on_and_on_my_friends"],
+            &[],
+            r#"
+fn foobar() {
+    while True {
+        use it_goes_on_and_on_and_on_my_friends;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Unsafe
+    //
+    #[test]
+    fn extract_use_unsafe() {
+        try_extract_use!(
+            &["safety_always"],
+            &[],
+            r#"
+fn foobar() {
+    unsafe {
+        use safety_always;
+    }
+}
+            "#
+        );
+    }
+
+    //
+    // Try Block, even though these aren't stable
+    //
+    #[test]
+    fn extract_use_try_block() {
+        try_extract_use!(
+            &["thisisntinstable"],
+            &[],
+            r#"
+fn foobar() {
+    try {
+        use thisisntinstable;
+    }
+}
+            "#
+        );
     }
 }
