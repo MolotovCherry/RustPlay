@@ -8,3 +8,5 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 thiserror = "1.0.38"
 syn = { version = "1.0.107", features = ["full"] }
+crates-index = "0.19.1"
+once_cell = "1.17.0"

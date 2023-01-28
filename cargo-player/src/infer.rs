@@ -1,5 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use crate::File;
 
+use crates_index::Index;
+use once_cell::sync::OnceCell;
 use syn::{
     parse_file, Block, Error, Expr, ImplItem, Item, ItemFn, ItemImpl, ItemMod, Stmt, UseTree,
 };
@@ -71,7 +75,38 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
         }
     }
 
+    // use the crates index to search for package existence and intelligently correct it if possible/needed
+    // that way we don't require a custom correction from the user if `use crate_name` is actually named `crate-name` on crates.io
+    // this is lazy initialized AND initialized only once to save performance
+    static INDEX: OnceCell<Option<Arc<Mutex<Index>>>> = OnceCell::new();
+
     for dep in deps.iter_mut().skip(added) {
+        if dep.contains('_') {
+            // lazy initialize to save performance
+            let index = INDEX.get_or_init(|| {
+                let i = Index::new_cargo_default();
+                if let Ok(i) = i {
+                    return Some(Arc::new(Mutex::new(i)));
+                }
+
+                None
+            });
+
+            if let Some(index) = index {
+                let index = index.lock().unwrap();
+
+                let crate_ = index.crate_(dep);
+                // crate not found in index, perhaps we should try another casing?
+                if crate_.is_none() {
+                    let new_crate = dep.replace('_', "-");
+                    // only replace dep if crate actually exists, otherwise, let user see error for their typed in crate
+                    if index.crate_(&new_crate).is_some() {
+                        *dep = new_crate;
+                    }
+                }
+            }
+        }
+
         dep.push_str(r#" = "*""#)
     }
 
@@ -328,6 +363,11 @@ mod baz_bar {}
             "#
             )
         );
+    }
+
+    #[test]
+    fn infer_deps_fix_package_by_index_lookup() {
+        try_infer_deps!(r#"proc-macro2 = "*""#, ("main", "use proc_macro2;"));
     }
 
     /**

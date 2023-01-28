@@ -20,6 +20,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Can play scratches (very basic functionality currently)
 - Nice terminal snapping close / open functionality
 - Automatically infers dependencies from your `use` statements via dynamic code analysis
+- - Is even smart enough to know when the crate is named `proc-macro2` instead of `proc_macro2` on crates.io and fix it for you. These cases don't need a custom depedency declaration!
 - For more complex needs such as specific versions and crate features, can manually include deps in cargo.toml or even whole sections of cargo.toml code
 
 ![Ui Demo](/readme_assets/ui.gif)
