@@ -40,7 +40,22 @@ pub fn infer_deps(files: &[File]) -> Result<String, syn::Error> {
 
                 // remove dependency with same name to avoid conflicts - user provided deps are overrides
                 if let Some(name) = name {
-                    let index = deps.iter().position(|p| p == name);
+                    let index = deps.iter().position(|p| {
+                        let convert_case = |b| -> u8 {
+                            // only convert - to _ . Else, it's either _, or something we shouldn't filter
+                            if b == b'-' {
+                                b'_'
+                            } else {
+                                b
+                            }
+                        };
+
+                        // Compare crate names with - or _ being equal
+                        p.bytes()
+                            .map(convert_case)
+                            .eq(name.bytes().map(convert_case))
+                    });
+
                     if let Some(i) = index {
                         deps.remove(i);
                     }
