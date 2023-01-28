@@ -246,6 +246,95 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    /**
+     *
+     * Infer Deps
+     *
+     */
+
+    macro_rules! try_infer_deps {
+        ($result:literal, ($($name:literal, $code:literal),*)) => {
+            let files = &[
+                $(
+                    File::new($name, $code)
+                )*
+            ];
+
+            let result = infer_deps(files);
+            assert_eq!($result, result.unwrap());
+        };
+    }
+
+    #[test]
+    fn infer_deps_baseline() {
+        try_infer_deps!(
+            r#"foobar = "*"
+baz = "*""#,
+            ("main", "use foobar; use baz;")
+        );
+    }
+
+    #[test]
+    fn infer_deps_custom_not_first_line() {
+        try_infer_deps!(
+            r#"baz_bar = "*""#,
+            (
+                "main",
+                r#"
+//# baz-bar = "*"
+use baz_bar;
+            "#
+            )
+        );
+    }
+
+    #[test]
+    fn infer_deps_custom_normalized() {
+        try_infer_deps!(
+            r#"baz-bar = "*""#,
+            (
+                "main",
+                r#"//# baz-bar = "*"
+use baz_bar;
+            "#
+            )
+        );
+    }
+
+    #[test]
+    fn infer_deps_custom() {
+        try_infer_deps!(
+            r#"baz-bar = "1.2.3""#,
+            (
+                "main",
+                r#"//# baz-bar = "1.2.3"
+use baz_bar;
+            "#
+            )
+        );
+    }
+
+    #[test]
+    fn infer_deps_mod() {
+        try_infer_deps!(
+            r#"non_mod = "*""#,
+            (
+                "main",
+                r#"
+use baz_bar::*;
+use non_mod;
+
+mod baz_bar {}
+            "#
+            )
+        );
+    }
+
+    /**
+     *
+     * Extract Use
+     *
+     */
 
     macro_rules! try_extract_use {
         ($use_eq:expr, $mod_eq: expr, $code:literal) => {
@@ -265,6 +354,22 @@ mod tests {
     //
     // Top Level
     //
+
+    #[test]
+    fn extract_use_ignores_keywords() {
+        try_extract_use!(
+            &[],
+            &[],
+            r#"
+use std::thread;
+use core::whatever;
+use crate::baz;
+use self::foo;
+use alloc::nothing;
+use super::bar;
+            "#
+        );
+    }
 
     #[test]
     fn extract_use_top_level() {
