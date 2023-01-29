@@ -1,7 +1,7 @@
 # RustPlay
 A desktop program for playing Rust scratch files
 
-This program is currently alpha, but has a basic working terminal and compiles and runs rust scratches.  
+This program is currently alpha, but has a basic working terminal and compiles and runs rust scratches.
 Currently Windows only.
 
 ### But why?
@@ -15,6 +15,8 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 
 ## Current Features
 - Windows support
+- Faster than play.rust-lang.org
+- Can use any dependencies you want with zero restrictions
 - Nice titlebar with tabs integrated into decoration WITH windows acrylic support (win11 only)
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
