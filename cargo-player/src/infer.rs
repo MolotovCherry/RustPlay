@@ -367,7 +367,19 @@ mod baz_bar {}
 
     #[test]
     fn infer_deps_fix_package_by_index_lookup() {
-        try_infer_deps!(r#"proc-macro2 = "*""#, ("main", "use proc_macro2;"));
+        try_infer_deps!(
+            r#"proc-macro2 = "*"
+rand_core = "*"
+cfg-if = "*""#,
+            (
+                "main",
+                r#"
+use proc_macro2;
+use rand_core;
+use cfg_if;
+"#
+            )
+        );
     }
 
     /**
