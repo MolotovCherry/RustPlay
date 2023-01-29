@@ -81,6 +81,11 @@ impl Dock {
             .style(style)
             .show_inside(ui, &mut tab_viewer);
 
+        // keep the terminal active display on the selected tab
+        if let Some((_, tab)) = tree.find_active() {
+            config.terminal.active_tab = Some(tab.id);
+        }
+
         // add data to command vec
         config
             .dock
@@ -251,8 +256,6 @@ impl TabEvents {
                         })
                         .collect::<SmallVec<[&mut Tab; 1]>>()[0];
 
-                    config.terminal.active_tab = Some(*id);
-
                     let id = *id;
                     let code = tab.editor.code.clone();
 
@@ -310,6 +313,9 @@ impl TabEvents {
                             .edition(Edition::E2021)
                             .subcommand(Subcommand::Run)
                             .target_prefix("rust-play")
+                            // .env_var("CARGO_TERM_COLOR", "always")
+                            // .env_var("CARGO_TERM_PROGRESS_WHEN", "always")
+                            // .env_var("CARGO_TERM_PROGRESS_WIDTH", "10")
                             .create()
                             .expect("Oh no");
 
