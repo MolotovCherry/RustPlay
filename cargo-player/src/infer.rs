@@ -243,12 +243,8 @@ fn extract_use(item: TokenType, deps: &mut Vec<String>, mod_stmts: &mut Vec<Stri
                 Expr::If(i) => {
                     extract_use(TokenType::Block(i.then_branch), deps, mod_stmts);
 
-                    if i.else_branch.is_some() {
-                        extract_use(
-                            TokenType::Stmt(Stmt::Expr(*i.else_branch.unwrap().1)),
-                            deps,
-                            mod_stmts,
-                        );
+                    if let Some((_, e)) = i.else_branch {
+                        extract_use(TokenType::Stmt(Stmt::Expr(*e)), deps, mod_stmts);
                     }
                 }
 
