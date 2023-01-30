@@ -214,7 +214,7 @@ pub fn parse(text: &str) -> Parsed {
                                 97 => fg = Some(Color::BrightWhite),
                                 107 => bg = Some(Color::BrightWhite),
 
-                                _ => (),
+                                _ => break,
                             }
                         }
                     }
