@@ -31,6 +31,7 @@ cargo-player = { path = "../cargo-player" }
 rand = "0.8.5"
 ansi-parser = "0.8.0"
 strip-ansi-escapes = "0.1.1"
+heapless = "0.5.6"
 
 [dependencies.windows]
 version = "0.44.0"

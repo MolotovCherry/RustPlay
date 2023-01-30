@@ -2440,6 +2440,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_dock",
+ "heapless",
  "lazy_static",
  "once_cell",
  "paste",
