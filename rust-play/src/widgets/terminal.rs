@@ -129,7 +129,10 @@ impl AnsiColorParser {
 
         for chunk in parsed.properties {
             let text_color = chunk.fg.map(ansi_to_color32).unwrap_or(default_color);
-            let background_color = chunk.bg.map(ansi_to_color32).unwrap_or(Color32::default());
+            let background_color = chunk
+                .bg
+                .map(ansi_to_color32)
+                .unwrap_or(Color32::TRANSPARENT);
 
             let italics = chunk.style.italic;
             let underline = chunk.style.underline;

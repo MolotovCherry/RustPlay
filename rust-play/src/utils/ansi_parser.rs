@@ -101,69 +101,8 @@ pub fn parse(text: &str) -> Parsed {
             Output::Escape(e) => {
                 match e {
                     AnsiSequence::SetGraphicsMode(m) => {
+                        // parse multi color codes independently
                         match m[0] {
-                            // reset all modes
-                            0 => {
-                                bold = false;
-                                dim = false;
-                                italic = false;
-                                underline = false;
-                                blink = false;
-                                reverse = false;
-                                hidden = false;
-                                strikethrough = false;
-                                fg = None;
-                                bg = None;
-                            }
-
-                            // set bold -> 22 reset
-                            1 => bold = true,
-
-                            // set dim/faint -> 22 reset
-                            2 => dim = true,
-
-                            // set italic -> 23 reset
-                            3 => italic = true,
-
-                            // set underline -> 24 reset
-                            4 => underline = true,
-
-                            // set blink -> 25 reset
-                            5 => blink = true,
-
-                            // set inverse/reverse -> 27 reset
-                            7 => reverse = true,
-
-                            // set hidden -> 28 reset
-                            8 => hidden = true,
-
-                            // set strikethrough -> 29 reset
-                            9 => strikethrough = true,
-
-                            30 => fg = Some(Color::Black),
-                            40 => bg = Some(Color::Black),
-
-                            31 => fg = Some(Color::Red),
-                            41 => bg = Some(Color::Red),
-
-                            32 => fg = Some(Color::Green),
-                            42 => bg = Some(Color::Green),
-
-                            33 => fg = Some(Color::Yellow),
-                            43 => bg = Some(Color::Yellow),
-
-                            34 => fg = Some(Color::Blue),
-                            44 => bg = Some(Color::Blue),
-
-                            35 => fg = Some(Color::Magenta),
-                            45 => bg = Some(Color::Magenta),
-
-                            36 => fg = Some(Color::Cyan),
-                            46 => bg = Some(Color::Cyan),
-
-                            37 => fg = Some(Color::White),
-                            47 => bg = Some(Color::White),
-
                             38 => {
                                 if m[1] == 5 {
                                     fg = Some(parse_rgb(m[2]));
@@ -179,35 +118,104 @@ pub fn parse(text: &str) -> Parsed {
                                 }
                             }
 
-                            // Default
-                            39 => fg = None,
-                            49 => bg = None,
-
-                            90 => fg = Some(Color::BrightBlack),
-                            100 => bg = Some(Color::BrightBlack),
-
-                            91 => fg = Some(Color::BrightRed),
-                            101 => bg = Some(Color::BrightRed),
-
-                            92 => fg = Some(Color::BrightGreen),
-                            102 => bg = Some(Color::BrightGreen),
-
-                            93 => fg = Some(Color::BrightYellow),
-                            103 => bg = Some(Color::BrightYellow),
-
-                            94 => fg = Some(Color::BrightBlue),
-                            104 => bg = Some(Color::BrightBlue),
-
-                            95 => fg = Some(Color::BrightMagenta),
-                            105 => bg = Some(Color::BrightMagenta),
-
-                            96 => fg = Some(Color::BrightCyan),
-                            106 => bg = Some(Color::BrightCyan),
-
-                            97 => fg = Some(Color::BrightWhite),
-                            107 => bg = Some(Color::BrightWhite),
-
                             _ => (),
+                        }
+
+                        // these can have multiple commands, so loop them
+                        for c in m {
+                            match c {
+                                // reset all modes
+                                0 => {
+                                    bold = false;
+                                    dim = false;
+                                    italic = false;
+                                    underline = false;
+                                    blink = false;
+                                    reverse = false;
+                                    hidden = false;
+                                    strikethrough = false;
+                                    fg = None;
+                                    bg = None;
+                                }
+
+                                // set bold -> 22 reset
+                                1 => bold = true,
+
+                                // set dim/faint -> 22 reset
+                                2 => dim = true,
+
+                                // set italic -> 23 reset
+                                3 => italic = true,
+
+                                // set underline -> 24 reset
+                                4 => underline = true,
+
+                                // set blink -> 25 reset
+                                5 => blink = true,
+
+                                // set inverse/reverse -> 27 reset
+                                7 => reverse = true,
+
+                                // set hidden -> 28 reset
+                                8 => hidden = true,
+
+                                // set strikethrough -> 29 reset
+                                9 => strikethrough = true,
+
+                                30 => fg = Some(Color::Black),
+                                40 => bg = Some(Color::Black),
+
+                                31 => fg = Some(Color::Red),
+                                41 => bg = Some(Color::Red),
+
+                                32 => fg = Some(Color::Green),
+                                42 => bg = Some(Color::Green),
+
+                                33 => fg = Some(Color::Yellow),
+                                43 => bg = Some(Color::Yellow),
+
+                                34 => fg = Some(Color::Blue),
+                                44 => bg = Some(Color::Blue),
+
+                                35 => fg = Some(Color::Magenta),
+                                45 => bg = Some(Color::Magenta),
+
+                                36 => fg = Some(Color::Cyan),
+                                46 => bg = Some(Color::Cyan),
+
+                                37 => fg = Some(Color::White),
+                                47 => bg = Some(Color::White),
+
+                                // Default
+                                39 => fg = None,
+                                49 => bg = None,
+
+                                90 => fg = Some(Color::BrightBlack),
+                                100 => bg = Some(Color::BrightBlack),
+
+                                91 => fg = Some(Color::BrightRed),
+                                101 => bg = Some(Color::BrightRed),
+
+                                92 => fg = Some(Color::BrightGreen),
+                                102 => bg = Some(Color::BrightGreen),
+
+                                93 => fg = Some(Color::BrightYellow),
+                                103 => bg = Some(Color::BrightYellow),
+
+                                94 => fg = Some(Color::BrightBlue),
+                                104 => bg = Some(Color::BrightBlue),
+
+                                95 => fg = Some(Color::BrightMagenta),
+                                105 => bg = Some(Color::BrightMagenta),
+
+                                96 => fg = Some(Color::BrightCyan),
+                                106 => bg = Some(Color::BrightCyan),
+
+                                97 => fg = Some(Color::BrightWhite),
+                                107 => bg = Some(Color::BrightWhite),
+
+                                _ => (),
+                            }
                         }
                     }
 
