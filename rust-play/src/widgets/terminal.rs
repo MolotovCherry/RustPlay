@@ -303,8 +303,8 @@ impl Terminal {
                     (*hash_stderr, *plain_stderr) = restrip(&terminal_output_stderr);
                 }
 
-                let mut read_only_term_stdout = ReadOnlyString::new(&plain_stdout);
-                let mut read_only_term_stderr = ReadOnlyString::new(&plain_stderr);
+                let mut read_only_term_stdout = ReadOnlyString::new(plain_stdout);
+                let mut read_only_term_stderr = ReadOnlyString::new(plain_stderr);
 
                 let ansi_colors = config.theme.ansi_colors;
 

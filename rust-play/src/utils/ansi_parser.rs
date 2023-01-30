@@ -70,6 +70,12 @@ pub fn parse(text: &str) -> Parsed {
                     continue;
                 }
 
+                // ansi-parser fails to strip escape codes in some text
+                // https://gitlab.com/davidbittner/ansi-parser/-/issues/9
+                // Due to this bug, there may be some things that don't parse :(
+                let stripped = strip_ansi_escapes::strip(t).unwrap();
+                let t = std::str::from_utf8(&stripped).unwrap();
+
                 let style = TextStyle {
                     bold,
                     dim,
