@@ -277,7 +277,7 @@ fn main() {
 }
 
 impl CodeEditor {
-    pub fn show(&mut self, id: Id, ui: &mut egui::Ui, scroll_offset: Vec2, focused: bool) -> Vec2 {
+    pub fn show(&mut self, id: Id, ui: &mut egui::Ui, scroll_offset: Vec2) -> Vec2 {
         let Self { language, code } = self;
 
         let frame_rect = ui.max_rect().shrink(6.0);
@@ -325,11 +325,6 @@ impl CodeEditor {
             .show(&mut frame_ui, |ui| {
                 ui.add(text_widget);
             });
-
-        // let mut memory = ui.memory();
-        // if !memory.has_focus(id) && focused {
-        //     memory.request_focus(id);
-        // }
 
         scroll_res.state.offset
     }

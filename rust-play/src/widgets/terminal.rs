@@ -1,7 +1,16 @@
-use egui::panel::PanelState;
-use egui::{pos2, vec2, CursorIcon, Id, Rect, Sense, TextBuffer, Vec2};
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
-use crate::config::Config;
+use egui::mutex::Mutex;
+use egui::panel::PanelState;
+use egui::text::LayoutJob;
+use egui::{pos2, vec2, Color32, CursorIcon, FontId, Id, Rect, Sense, Stroke, TextBuffer, Vec2};
+use once_cell::sync::OnceCell;
+
+use crate::config::{AnsiColors, Config};
+use crate::utils::ansi_parser::{self, Color};
 
 use super::titlebar::TITLEBAR_HEIGHT;
 
@@ -33,6 +42,126 @@ impl<'a> TextBuffer for ReadOnlyString<'a> {
 impl<'a> ReadOnlyString<'a> {
     fn new(content: &'a str) -> Self {
         Self { content }
+    }
+}
+
+// Memoized ansi color parsing
+pub fn parse_ansi(
+    ctx: &egui::Context,
+    ansi_colors: AnsiColors,
+    unparsed_text: &str,
+    text: &str,
+) -> LayoutJob {
+    impl egui::util::cache::ComputerMut<(u64, Color32, AnsiColors, &str, &str), LayoutJob>
+        for AnsiColorParser
+    {
+        fn compute(
+            &mut self,
+            (_, default_color, ansi_colors, unparsed_text, text): (
+                u64,
+                Color32,
+                AnsiColors,
+                &str,
+                &str,
+            ),
+        ) -> LayoutJob {
+            self.parse(default_color, ansi_colors, unparsed_text, text)
+        }
+    }
+
+    type ColorCache = egui::util::cache::FrameCache<LayoutJob, AnsiColorParser>;
+
+    let mut s = DefaultHasher::new();
+    unparsed_text.hash(&mut s);
+    let hash = s.finish();
+
+    let default_color = { ctx.style().visuals.text_color() };
+
+    let mut memory = ctx.memory();
+    let color_cache = memory.caches.cache::<ColorCache>();
+    color_cache.get((hash, default_color, ansi_colors, unparsed_text, text))
+}
+
+struct AnsiColorParser;
+
+impl Default for AnsiColorParser {
+    fn default() -> Self {
+        Self
+    }
+}
+
+impl AnsiColorParser {
+    fn parse(
+        &self,
+        default_color: Color32,
+        colors: AnsiColors,
+        unparsed_text: &str,
+        text: &str,
+    ) -> LayoutJob {
+        let ansi_to_color32 = |color| match color {
+            Color::Black => colors.black.to_color32(),
+            Color::Red => colors.red.to_color32(),
+            Color::Green => colors.green.to_color32(),
+            Color::Yellow => colors.yellow.to_color32(),
+            Color::Blue => colors.blue.to_color32(),
+            Color::Magenta => colors.magenta.to_color32(),
+            Color::Cyan => colors.cyan.to_color32(),
+            Color::White => colors.white.to_color32(),
+            Color::BrightBlack => colors.bright_black.to_color32(),
+            Color::BrightRed => colors.bright_red.to_color32(),
+            Color::BrightGreen => colors.bright_green.to_color32(),
+            Color::BrightYellow => colors.bright_yellow.to_color32(),
+            Color::BrightBlue => colors.bright_blue.to_color32(),
+            Color::BrightMagenta => colors.bright_magenta.to_color32(),
+            Color::BrightCyan => colors.bright_cyan.to_color32(),
+            Color::BrightWhite => colors.bright_white.to_color32(),
+            Color::Rgb(r, g, b) => Color32::from_rgb(r, g, b),
+        };
+
+        use egui::text::{LayoutSection, TextFormat};
+
+        let parsed = ansi_parser::parse(unparsed_text);
+
+        let mut job = LayoutJob {
+            text: text.into(),
+            ..Default::default()
+        };
+
+        for chunk in parsed.properties {
+            let text_color = chunk.fg.map(ansi_to_color32).unwrap_or(default_color);
+            let background_color = chunk.bg.map(ansi_to_color32).unwrap_or(Color32::default());
+
+            let italics = chunk.style.italic;
+            let underline = chunk.style.underline;
+
+            let underline = if underline {
+                Stroke::new(1.0, text_color)
+            } else {
+                Stroke::NONE
+            };
+
+            let strikethrough = if chunk.style.strikethrough {
+                Stroke::new(1.0, text_color)
+            } else {
+                Stroke::NONE
+            };
+
+            job.sections.push(LayoutSection {
+                leading_space: 0.0,
+                byte_range: chunk.start..chunk.end,
+                format: TextFormat {
+                    font_id: FontId::monospace(12.0),
+                    color: text_color,
+                    italics,
+                    underline,
+                    background: background_color,
+                    strikethrough,
+                    ..Default::default()
+                },
+            });
+        }
+
+        job
     }
 }
 
@@ -125,15 +254,76 @@ impl Terminal {
                 let terminal_output_stdout = terminal_output.0.lock().unwrap();
                 let terminal_output_stderr = terminal_output.1.lock().unwrap();
 
-                let mut read_only_term_stdout = ReadOnlyString::new(&terminal_output_stdout);
-                let mut read_only_term_stderr = ReadOnlyString::new(&terminal_output_stderr);
+                //
+                // Parsing and caching
+                //
+                static CACHE_STDOUT: OnceCell<Arc<Mutex<HashMap<Id, (u64, String)>>>> =
+                    OnceCell::new();
+                static CACHE_STDERR: OnceCell<Arc<Mutex<HashMap<Id, (u64, String)>>>> =
+                    OnceCell::new();
+                let mut cache_stdout = CACHE_STDOUT
+                    .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+                    .lock();
+                let mut cache_stderr = CACHE_STDERR
+                    .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+                    .lock();
+
+                let restrip = |text: &str| {
+                    let stripped =
+                        String::from_utf8(strip_ansi_escapes::strip(text).unwrap()).unwrap();
+                    let mut s = DefaultHasher::new();
+                    text.hash(&mut s);
+                    let hash = s.finish();
+
+                    (hash, stripped)
+                };
+
+                let (hash_stdout, plain_stdout) = cache_stdout
+                    .entry(active_tab)
+                    .or_insert_with(|| restrip(&terminal_output_stdout));
+                let (hash_stderr, plain_stderr) = cache_stderr
+                    .entry(active_tab)
+                    .or_insert_with(|| restrip(&terminal_output_stderr));
+
+                let mut s = DefaultHasher::new();
+                let mut s2 = DefaultHasher::new();
+                terminal_output_stdout.hash(&mut s);
+                terminal_output_stderr.hash(&mut s2);
+                let new_hash_stdout = s.finish();
+                let new_hash_stderr = s2.finish();
+
+                // if hash isn't the same, then recalculate and re-save it
+                if *hash_stdout != new_hash_stdout {
+                    (*hash_stdout, *plain_stdout) = restrip(&terminal_output_stdout);
+                }
+                if *hash_stderr != new_hash_stderr {
+                    (*hash_stderr, *plain_stderr) = restrip(&terminal_output_stderr);
+                }
+
+                let mut read_only_term_stdout = ReadOnlyString::new(&plain_stdout);
+                let mut read_only_term_stderr = ReadOnlyString::new(&plain_stderr);
+
+                let ansi_colors = config.theme.ansi_colors;
+
+                let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    let mut layout_job =
+                        parse_ansi(ui.ctx(), ansi_colors, &terminal_output_stdout, text);
+                    layout_job.wrap.max_width = wrap_width;
+                    ui.fonts().layout_job(layout_job)
+                };
+                let mut layouter2 = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                    let mut layout_job =
+                        parse_ansi(ui.ctx(), ansi_colors, &terminal_output_stderr, text);
+                    layout_job.wrap.max_width = wrap_width;
+                    ui.fonts().layout_job(layout_job)
+                };
 
                 let text_widget_stdout = egui::TextEdit::multiline(&mut read_only_term_stdout)
                     .font(egui::TextStyle::Monospace) // for cursor height
                     // remove the frame and draw our own
                     .frame(false)
                     .desired_width(f32::INFINITY)
-                    //.layouter(&mut layouter)
+                    .layouter(&mut layouter)
                     .id(id.with("term_output_stdout"))
                     .interactive(true);
 
@@ -142,7 +332,7 @@ impl Terminal {
                     // remove the frame and draw our own
                     .frame(false)
                     .desired_width(f32::INFINITY)
-                    //.layouter(&mut layouter)
+                    .layouter(&mut layouter2)
                     .id(id.with("term_output_stderr"))
                     .interactive(true);
 

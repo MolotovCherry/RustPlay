@@ -69,13 +69,7 @@ impl Dock {
 
         let tab_data = TabData::new();
 
-        let active_id = if let Some((_, tab)) = tree.find_active_focused() {
-            tab.id
-        } else {
-            Id::new("")
-        };
-
-        let mut tab_viewer = TabViewer::new(ctx, &tab_data, active_id);
+        let mut tab_viewer = TabViewer::new(ctx, &tab_data);
 
         DockArea::new(tree)
             .style(style)
@@ -99,16 +93,11 @@ type TabData = Data<Command>;
 struct TabViewer<'a> {
     _ctx: &'a egui::Context,
     data: &'a TabData,
-    focused_tab: Id,
 }
 
 impl<'a> TabViewer<'a> {
-    fn new(ctx: &'a egui::Context, data: &'a TabData, focused_tab: Id) -> Self {
-        Self {
-            _ctx: ctx,
-            data,
-            focused_tab,
-        }
+    fn new(ctx: &'a egui::Context, data: &'a TabData) -> Self {
+        Self { _ctx: ctx, data }
     }
 }
 
@@ -129,7 +118,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 tab.id.with("code_editor"),
                 ui,
                 tab.scroll_offset.unwrap_or_default(),
-                tab.id == self.focused_tab,
             ));
         });
     }
@@ -313,7 +301,7 @@ impl TabEvents {
                             .edition(Edition::E2021)
                             .subcommand(Subcommand::Run)
                             .target_prefix("rust-play")
-                            // .env_var("CARGO_TERM_COLOR", "always")
+                            .env_var("CARGO_TERM_COLOR", "always")
                             // .env_var("CARGO_TERM_PROGRESS_WHEN", "always")
                             // .env_var("CARGO_TERM_PROGRESS_WIDTH", "10")
                             .create()

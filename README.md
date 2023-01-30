@@ -15,8 +15,8 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 
 ## Current Features
 - Windows support
-- Faster than play.rust-lang.org
-- Can use any dependencies you want with zero restrictions
+- Faster than play.rust-lang.org, and can use any dependencies you want with zero restrictions
+- Color support in terminal
 - Nice titlebar with tabs integrated into decoration WITH windows acrylic support (win11 only)
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
@@ -32,7 +32,6 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Linux Support
 - Rename / save / upload to play.rust-lang.org (gist creation functionality is already done)
 - Project options window to configure every aspect of the rust scratch build. Will support nearly all optionsthat the website supports!
-- Parse color in the terminal
 - Possible redesign of terminal window (not sure what to do yet)
 - Fix caption buttons to clip ui instead of overlay
 - Clearing terminal screen

@@ -17,6 +17,7 @@ pub struct Data<DataType, const N: usize = 1> {
     data: RefCell<InnerData<DataType, N>>,
 }
 
+#[allow(unused)]
 impl<DataType, const N: usize> Data<DataType, N> {
     pub fn new() -> Self {
         Data {
