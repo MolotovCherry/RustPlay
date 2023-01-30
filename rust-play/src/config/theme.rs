@@ -1,9 +1,46 @@
 use egui::Color32;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ThemeConfig {
-    pub ansi_colors: AnsiColors,
+    ansi_colors: AnsiColors,
+    pub force_bright: bool,
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        Self {
+            ansi_colors: Default::default(),
+            force_bright: true,
+        }
+    }
+}
+
+impl ThemeConfig {
+    pub fn get_ansi_colors(&self) -> AnsiColors {
+        if self.force_bright {
+            AnsiColors {
+                black: self.ansi_colors.bright_black,
+                red: self.ansi_colors.bright_red,
+                green: self.ansi_colors.bright_green,
+                yellow: self.ansi_colors.bright_yellow,
+                blue: self.ansi_colors.bright_blue,
+                magenta: self.ansi_colors.bright_magenta,
+                cyan: self.ansi_colors.bright_cyan,
+                white: self.ansi_colors.bright_white,
+                bright_black: self.ansi_colors.bright_black,
+                bright_red: self.ansi_colors.bright_red,
+                bright_green: self.ansi_colors.bright_green,
+                bright_yellow: self.ansi_colors.bright_yellow,
+                bright_blue: self.ansi_colors.bright_blue,
+                bright_magenta: self.ansi_colors.bright_magenta,
+                bright_cyan: self.ansi_colors.bright_cyan,
+                bright_white: self.ansi_colors.bright_white,
+            }
+        } else {
+            self.ansi_colors
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, Hash)]

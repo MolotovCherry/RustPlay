@@ -104,7 +104,7 @@ impl App {
 
         let mut config = if file.exists() {
             let content = fs::read_to_string(file).expect("Failed to read config file");
-            toml::from_str::<Config>(&content).expect("Failed to deserialize Config")
+            toml::from_str::<Config>(&content).unwrap_or_default()
         } else {
             Config::default()
         };

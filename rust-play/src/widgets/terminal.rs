@@ -260,15 +260,13 @@ impl Terminal {
                 //
                 // Parsing and caching
                 //
-                static CACHE_STDOUT: OnceCell<Arc<Mutex<HashMap<Id, (u64, String)>>>> =
-                    OnceCell::new();
-                static CACHE_STDERR: OnceCell<Arc<Mutex<HashMap<Id, (u64, String)>>>> =
-                    OnceCell::new();
+                static CACHE_STDOUT: OnceCell<Mutex<HashMap<Id, (u64, String)>>> = OnceCell::new();
+                static CACHE_STDERR: OnceCell<Mutex<HashMap<Id, (u64, String)>>> = OnceCell::new();
                 let mut cache_stdout = CACHE_STDOUT
-                    .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+                    .get_or_init(|| Mutex::new(HashMap::new()))
                     .lock();
                 let mut cache_stderr = CACHE_STDERR
-                    .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+                    .get_or_init(|| Mutex::new(HashMap::new()))
                     .lock();
 
                 let restrip = |text: &str| {
@@ -306,7 +304,7 @@ impl Terminal {
                 let mut read_only_term_stdout = ReadOnlyString::new(plain_stdout);
                 let mut read_only_term_stderr = ReadOnlyString::new(plain_stderr);
 
-                let ansi_colors = config.theme.ansi_colors;
+                let ansi_colors = config.theme.get_ansi_colors();
 
                 let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                     let mut layout_job =
