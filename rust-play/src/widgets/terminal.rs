@@ -253,15 +253,14 @@ impl Terminal {
                     .get_mut(&active_tab)
                     .unwrap_or(&mut Vec2::default());
 
-                let terminal_output = config.terminal.content.entry(active_tab).or_default();
-                let terminal_output_stdout = terminal_output.0.lock().unwrap();
-                let terminal_output_stderr = terminal_output.1.lock().unwrap();
-
                 //
                 // Parsing and caching
                 //
-                static CACHE_STDOUT: OnceCell<Mutex<HashMap<Id, (u64, String)>>> = OnceCell::new();
-                static CACHE_STDERR: OnceCell<Mutex<HashMap<Id, (u64, String)>>> = OnceCell::new();
+                // (unstripped, strippedtext)
+                static CACHE_STDOUT: OnceCell<Mutex<HashMap<Id, (String, String)>>> =
+                    OnceCell::new();
+                static CACHE_STDERR: OnceCell<Mutex<HashMap<Id, (String, String)>>> =
+                    OnceCell::new();
                 let mut cache_stdout = CACHE_STDOUT
                     .get_or_init(|| Mutex::new(HashMap::new()))
                     .lock();
@@ -269,37 +268,51 @@ impl Terminal {
                     .get_or_init(|| Mutex::new(HashMap::new()))
                     .lock();
 
-                let restrip = |text: &str| {
-                    let stripped =
-                        String::from_utf8(strip_ansi_escapes::strip(text).unwrap()).unwrap();
-                    let mut s = DefaultHasher::new();
-                    text.hash(&mut s);
-                    let hash = s.finish();
+                let terminal_output = config.terminal.content.entry(active_tab).or_default();
+                let (
+                    (terminal_output_stdout, terminal_output_stderr),
+                    (plain_stdout, plain_stderr),
+                ) = {
+                    if config.terminal.started_run {
+                        // clear out the cached entries to restart the term output fresh
+                        cache_stdout.remove(&active_tab);
+                        cache_stderr.remove(&active_tab);
 
-                    (hash, stripped)
+                        config.terminal.started_run = false;
+                    }
+
+                    let (stdout_unstripped, stdout_stripped) = cache_stdout
+                        .entry(active_tab)
+                        .or_insert((String::new(), String::new()));
+                    let (stderr_unstripped, stderr_stripped) = cache_stderr
+                        .entry(active_tab)
+                        .or_insert((String::new(), String::new()));
+
+                    if let Some((stdout, stderr)) = terminal_output.as_mut() {
+                        for msg in stdout.pop_iter() {
+                            stdout_unstripped.push_str(&msg);
+
+                            let stripped =
+                                String::from_utf8(strip_ansi_escapes::strip(msg).unwrap()).unwrap();
+
+                            stdout_stripped.push_str(&stripped);
+                        }
+
+                        for msg in stderr.pop_iter() {
+                            stderr_unstripped.push_str(&msg);
+
+                            let stripped =
+                                String::from_utf8(strip_ansi_escapes::strip(msg).unwrap()).unwrap();
+
+                            stderr_stripped.push_str(&stripped);
+                        }
+                    }
+
+                    (
+                        (&**stdout_unstripped, &**stderr_unstripped),
+                        (&**stdout_stripped, &**stderr_stripped),
+                    )
                 };
-
-                let (hash_stdout, plain_stdout) = cache_stdout
-                    .entry(active_tab)
-                    .or_insert_with(|| restrip(&terminal_output_stdout));
-                let (hash_stderr, plain_stderr) = cache_stderr
-                    .entry(active_tab)
-                    .or_insert_with(|| restrip(&terminal_output_stderr));
-
-                let mut s = DefaultHasher::new();
-                let mut s2 = DefaultHasher::new();
-                terminal_output_stdout.hash(&mut s);
-                terminal_output_stderr.hash(&mut s2);
-                let new_hash_stdout = s.finish();
-                let new_hash_stderr = s2.finish();
-
-                // if hash isn't the same, then recalculate and re-save it
-                if *hash_stdout != new_hash_stdout {
-                    (*hash_stdout, *plain_stdout) = restrip(&terminal_output_stdout);
-                }
-                if *hash_stderr != new_hash_stderr {
-                    (*hash_stderr, *plain_stderr) = restrip(&terminal_output_stderr);
-                }
 
                 let mut read_only_term_stdout = ReadOnlyString::new(plain_stdout);
                 let mut read_only_term_stderr = ReadOnlyString::new(plain_stderr);
@@ -308,13 +321,13 @@ impl Terminal {
 
                 let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                     let mut layout_job =
-                        parse_ansi(ui.ctx(), ansi_colors, &terminal_output_stdout, text);
+                        parse_ansi(ui.ctx(), ansi_colors, terminal_output_stdout, text);
                     layout_job.wrap.max_width = wrap_width;
                     ui.fonts().layout_job(layout_job)
                 };
                 let mut layouter2 = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                     let mut layout_job =
-                        parse_ansi(ui.ctx(), ansi_colors, &terminal_output_stderr, text);
+                        parse_ansi(ui.ctx(), ansi_colors, terminal_output_stderr, text);
                     layout_job.wrap.max_width = wrap_width;
                     ui.fonts().layout_job(layout_job)
                 };

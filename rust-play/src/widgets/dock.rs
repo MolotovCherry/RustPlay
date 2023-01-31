@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
+use ringbuf::HeapRb;
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -274,17 +276,20 @@ impl TabEvents {
                         .insert_temp::<Aborter>(abort_id, Arc::new(Mutex::new(atx)));
 
                     // these are used to stream the terminal output
-                    let queue_stdout = Arc::new(Mutex::new(String::new()));
-                    let queue_stderr = Arc::new(Mutex::new(String::new()));
+                    let rb_stdout = HeapRb::<String>::new(30);
+                    let rb_stderr = HeapRb::<String>::new(30);
 
-                    let sender_queue_stdout = Arc::clone(&queue_stdout);
-                    let sender_queue_stderr = Arc::clone(&queue_stderr);
+                    let (mut rb_stdout, rb_stdout_read) = rb_stdout.split();
+                    let (mut rb_stderr, rb_stderr_read) = rb_stderr.split();
+
                     config
                         .terminal
                         .content
-                        .insert(id, (sender_queue_stdout, sender_queue_stderr));
+                        .insert(id, Some((rb_stdout_read, rb_stderr_read)));
 
                     let owned_ctx = ctx.clone();
+
+                    config.terminal.started_run = true;
 
                     thread::spawn(move || {
                         let id = Id::new("continuous_mode");
@@ -334,10 +339,19 @@ impl TabEvents {
                         let stdout_handle = thread::spawn(move || {
                             let stdout_reader = BufReader::new(stdout);
                             for line in stdout_reader.lines() {
-                                if let Ok(line) = line {
-                                    let mut lock = queue_stdout.lock().unwrap();
-                                    lock.push_str(&line);
-                                    lock.push('\n');
+                                if let Ok(mut line) = line {
+                                    line.push('\n');
+
+                                    if rb_stdout.is_full() {
+                                        while rb_stdout.is_full() {
+                                            if !rb_stdout.is_full() {
+                                                let _ = rb_stdout.push(line);
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        let _ = rb_stdout.push(line);
+                                    }
                                 } else {
                                     panic!("Unable to send line {line:?}");
                                 }
@@ -347,10 +361,19 @@ impl TabEvents {
                         let stderr_handle = thread::spawn(move || {
                             let stderr_reader = BufReader::new(stderr);
                             for line in stderr_reader.lines() {
-                                if let Ok(line) = line {
-                                    let mut lock = queue_stderr.lock().unwrap();
-                                    lock.push_str(&line);
-                                    lock.push('\n');
+                                if let Ok(mut line) = line {
+                                    line.push('\n');
+
+                                    if rb_stderr.is_full() {
+                                        while rb_stderr.is_full() {
+                                            if !rb_stderr.is_full() {
+                                                let _ = rb_stderr.push(line);
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        let _ = rb_stderr.push(line);
+                                    }
                                 } else {
                                     panic!("Unable to send line {line:?}");
                                 }

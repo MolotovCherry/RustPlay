@@ -5,7 +5,7 @@ use super::theme::ThemeConfig;
 use super::GitHub;
 use super::Terminal;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Config {
     pub github: GitHub,
     pub theme: ThemeConfig,
