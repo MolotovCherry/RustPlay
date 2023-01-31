@@ -4,6 +4,10 @@ use std::process::Stdio;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 use cargo_player::{BuildType, Channel, Edition, File, Project, Subcommand};
 use egui::{vec2, Align2, Color32, Id, Ui, Vec2, Window};
@@ -306,6 +310,10 @@ impl TabEvents {
                             // .env_var("CARGO_TERM_PROGRESS_WIDTH", "10")
                             .create()
                             .expect("Oh no");
+
+                        // hide the console window from command. Very important.
+                        #[cfg(target_os = "windows")]
+                        command.creation_flags(CREATE_NO_WINDOW.0);
 
                         let mut child = command
                             .stderr(Stdio::piped())
