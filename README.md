@@ -25,7 +25,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - - Is even smart enough to know when the crate is named `crate-name` instead of `crate_name` on crates.io and automatically fix it for you. These cases don't need a custom dependency declaration!
 - For more complex needs such as specific versions and crate features, can manually include deps in cargo.toml or even whole sections of cargo.toml code
 
-![Ui Demo](/readme_assets/ui.png)
+![Ui Demo](/readme_assets/ui.gif)
 
 ## Next Goals
 - Theming with config
