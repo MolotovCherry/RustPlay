@@ -1,5 +1,6 @@
 use rand::Rng;
-use std::io::{BufRead, BufReader};
+use std::borrow::Cow;
+use std::io::{BufRead, BufReader, Read};
 use std::process::Stdio;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -311,8 +312,8 @@ impl TabEvents {
                             .subcommand(Subcommand::Run)
                             .target_prefix("rust-play")
                             .env_var("CARGO_TERM_COLOR", "always")
-                            // .env_var("CARGO_TERM_PROGRESS_WHEN", "always")
-                            // .env_var("CARGO_TERM_PROGRESS_WIDTH", "10")
+                            .env_var("CARGO_TERM_PROGRESS_WHEN", "always")
+                            .env_var("CARGO_TERM_PROGRESS_WIDTH", "150")
                             .create()
                             .expect("Oh no");
 
@@ -338,44 +339,102 @@ impl TabEvents {
 
                         let stdout_handle = thread::spawn(move || {
                             let stdout_reader = BufReader::new(stdout);
-                            for line in stdout_reader.lines() {
-                                if let Ok(mut line) = line {
-                                    line.push('\n');
 
-                                    if rb_stdout.is_full() {
-                                        while rb_stdout.is_full() {
-                                            if !rb_stdout.is_full() {
-                                                let _ = rb_stdout.push(line);
-                                                break;
-                                            }
+                            let mut send = move |line| {
+                                if rb_stdout.is_full() {
+                                    while rb_stdout.is_full() {
+                                        if !rb_stdout.is_full() {
+                                            let _ = rb_stdout.push(line);
+                                            break;
                                         }
-                                    } else {
-                                        let _ = rb_stdout.push(line);
                                     }
                                 } else {
-                                    panic!("Unable to send line {line:?}");
+                                    let _ = rb_stdout.push(line);
+                                }
+                            };
+
+                            // we need to split lines based on newline OR \r, so we can display dynamic output lines
+                            let mut buf = vec![];
+                            for b in stdout_reader.bytes() {
+                                if let Ok(b) = b {
+                                    if b == b'\n' || b == b'\r' {
+                                        buf.push(b);
+
+                                        let line = String::from_utf8_lossy(&buf);
+                                        match line {
+                                            Cow::Borrowed(b) => send(b.to_string()),
+                                            Cow::Owned(o) => send(o),
+                                        }
+
+                                        buf.clear();
+
+                                        continue;
+                                    }
+
+                                    buf.push(b);
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            // flush remaining output
+                            if !buf.is_empty() {
+                                buf.push(b'\n');
+                                let line = String::from_utf8_lossy(&buf);
+                                match line {
+                                    Cow::Borrowed(b) => send(b.to_string()),
+                                    Cow::Owned(o) => send(o),
                                 }
                             }
                         });
 
                         let stderr_handle = thread::spawn(move || {
                             let stderr_reader = BufReader::new(stderr);
-                            for line in stderr_reader.lines() {
-                                if let Ok(mut line) = line {
-                                    line.push('\n');
 
-                                    if rb_stderr.is_full() {
-                                        while rb_stderr.is_full() {
-                                            if !rb_stderr.is_full() {
-                                                let _ = rb_stderr.push(line);
-                                                break;
-                                            }
+                            let mut send = move |line| {
+                                if rb_stderr.is_full() {
+                                    while rb_stderr.is_full() {
+                                        if !rb_stderr.is_full() {
+                                            let _ = rb_stderr.push(line);
+                                            break;
                                         }
-                                    } else {
-                                        let _ = rb_stderr.push(line);
                                     }
                                 } else {
-                                    panic!("Unable to send line {line:?}");
+                                    let _ = rb_stderr.push(line);
+                                }
+                            };
+
+                            // we need to split lines based on newline OR \r, so we can display dynamic output lines
+                            let mut buf = vec![];
+                            for b in stderr_reader.bytes() {
+                                if let Ok(b) = b {
+                                    if b == b'\n' || b == b'\r' {
+                                        buf.push(b);
+
+                                        let line = String::from_utf8_lossy(&buf);
+                                        match line {
+                                            Cow::Borrowed(b) => send(b.to_string()),
+                                            Cow::Owned(o) => send(o),
+                                        }
+
+                                        buf.clear();
+
+                                        continue;
+                                    }
+
+                                    buf.push(b);
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            // flush remaining output
+                            if !buf.is_empty() {
+                                buf.push(b'\n');
+                                let line = String::from_utf8_lossy(&buf);
+                                match line {
+                                    Cow::Borrowed(b) => send(b.to_string()),
+                                    Cow::Owned(o) => send(o),
                                 }
                             }
                         });

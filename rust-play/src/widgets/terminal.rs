@@ -290,6 +290,11 @@ impl Terminal {
 
                     if let Some((stdout, stderr)) = terminal_output.as_mut() {
                         for msg in stdout.pop_iter() {
+                            // right now, we don't really truly support overwrite mode, sorry
+                            if msg.ends_with('\r') {
+                                continue;
+                            }
+
                             stdout_unstripped.push_str(&msg);
 
                             let stripped =
@@ -298,7 +303,66 @@ impl Terminal {
                             stdout_stripped.push_str(&stripped);
                         }
 
-                        for msg in stderr.pop_iter() {
+                        for mut msg in stderr.pop_iter() {
+                            if msg.ends_with('\r') {
+                                //
+                                // First, we need to strip out all previous lines
+                                //
+
+                                // now, find first occurance of when we added these lines and erase them all
+                                let previous_newline_unstripped = stderr_unstripped.find("\x00\n");
+                                let previous_newline_stripped = stderr_stripped.find("\x00\n");
+
+                                if let Some(prev) = previous_newline_unstripped {
+                                    // now get the last \n OR if none, erase the whole line cause it's the only line there
+                                    let search_loc = &stderr_unstripped[..prev - 2];
+                                    if let Some(loc) = search_loc.rfind('\n') {
+                                        stderr_unstripped.truncate(loc + 1);
+                                    } else {
+                                        stderr_unstripped.clear();
+                                    }
+                                }
+
+                                if let Some(prev) = previous_newline_stripped {
+                                    // now get the last \n OR if none, erase the whole line cause it's the only line there
+                                    let search_loc = &stderr_stripped[..prev - 2];
+                                    if let Some(loc) = search_loc.rfind('\n') {
+                                        stderr_stripped.truncate(loc + 1);
+                                    } else {
+                                        stderr_stripped.clear();
+                                    }
+                                }
+
+                                //
+                                // Now we can add the the strings to the end
+                                //
+
+                                // insert as a new line
+                                // pop off \r
+                                msg.pop();
+
+                                let trim_len = msg.trim_end().len();
+                                msg.truncate(trim_len);
+
+                                // ignore empty messages. The next line inserted will be a real one anyways
+                                if msg.is_empty() {
+                                    continue;
+                                }
+
+                                let mut stripped =
+                                    String::from_utf8(strip_ansi_escapes::strip(&msg).unwrap())
+                                        .unwrap();
+
+                                // and make it a newline; use \x00 as a special character to know how far to go back in erasing
+                                msg.push_str("\x00\n");
+                                stripped.push_str("\x00\n");
+
+                                stderr_unstripped.push_str(&msg);
+                                stderr_stripped.push_str(&stripped);
+
+                                continue;
+                            }
+
                             stderr_unstripped.push_str(&msg);
 
                             let stripped =
