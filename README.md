@@ -44,6 +44,10 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Potential multi-file module project builds (`cargo-player` does support this)
 - Cleanup old textedit state (tabs with the same node/tabindex use the same id hashes, and textedit state is persisted and not cleared when closing tabs)
 
+## FAQ
+#### Q: Why is there an error that says `use of undeclared crate`? I thought you inferred dependencies!
+A: We do indeed infer and automatically include dependencies. This happened because you have an error somewhere else in your code and it failed to compile. We are unable to infer dependencies if your code does not parse correctly. You can ignore any `use of undeclared crate` errors. Just fix your code and it'll be perfect 🙂
+
 ## Contributions
 All contributions are welcome!
 
