@@ -26,4 +26,7 @@ pub struct Terminal {
     pub opened_from_close: bool,
     pub opened_from_close_dragging: bool,
     pub closed_from_open: bool,
+    // keep track of the last valid index before dynamic output was added in stderr
+    // (unstripped, stripped)
+    pub dynamic_index: (usize, usize),
 }

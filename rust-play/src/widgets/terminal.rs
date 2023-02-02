@@ -278,6 +278,7 @@ impl Terminal {
                         cache_stdout.remove(&active_tab);
                         cache_stderr.remove(&active_tab);
 
+                        config.terminal.dynamic_index = (0, 0);
                         config.terminal.started_run = false;
                     }
 
@@ -304,34 +305,16 @@ impl Terminal {
                         }
 
                         for mut msg in stderr.pop_iter() {
+                            // get indexes of last valid non-dynamic output
+                            let previous_newline_unstripped = &mut config.terminal.dynamic_index.0;
+                            let previous_newline_stripped = &mut config.terminal.dynamic_index.1;
+
                             if msg.ends_with('\r') {
                                 //
                                 // First, we need to strip out all previous lines
                                 //
-
-                                // now, find first occurance of when we added these lines and erase them all
-                                let previous_newline_unstripped = stderr_unstripped.find("\x00\n");
-                                let previous_newline_stripped = stderr_stripped.find("\x00\n");
-
-                                if let Some(prev) = previous_newline_unstripped {
-                                    // now get the last \n OR if none, erase the whole line cause it's the only line there
-                                    let search_loc = &stderr_unstripped[..prev - 2];
-                                    if let Some(loc) = search_loc.rfind('\n') {
-                                        stderr_unstripped.truncate(loc + 1);
-                                    } else {
-                                        stderr_unstripped.clear();
-                                    }
-                                }
-
-                                if let Some(prev) = previous_newline_stripped {
-                                    // now get the last \n OR if none, erase the whole line cause it's the only line there
-                                    let search_loc = &stderr_stripped[..prev - 2];
-                                    if let Some(loc) = search_loc.rfind('\n') {
-                                        stderr_stripped.truncate(loc + 1);
-                                    } else {
-                                        stderr_stripped.clear();
-                                    }
-                                }
+                                stderr_unstripped.truncate(*previous_newline_unstripped);
+                                stderr_stripped.truncate(*previous_newline_stripped);
 
                                 //
                                 // Now we can add the the strings to the end
@@ -353,9 +336,8 @@ impl Terminal {
                                     String::from_utf8(strip_ansi_escapes::strip(&msg).unwrap())
                                         .unwrap();
 
-                                // and make it a newline; use \x00 as a special character to know how far to go back in erasing
-                                msg.push_str("\x00\n");
-                                stripped.push_str("\x00\n");
+                                msg.push('\n');
+                                stripped.push('\n');
 
                                 stderr_unstripped.push_str(&msg);
                                 stderr_stripped.push_str(&stripped);
@@ -366,9 +348,13 @@ impl Terminal {
                             stderr_unstripped.push_str(&msg);
 
                             let stripped =
-                                String::from_utf8(strip_ansi_escapes::strip(msg).unwrap()).unwrap();
+                                String::from_utf8(strip_ansi_escapes::strip(&msg).unwrap())
+                                    .unwrap();
 
                             stderr_stripped.push_str(&stripped);
+
+                            *previous_newline_unstripped += msg.len();
+                            *previous_newline_stripped += stripped.len();
                         }
                     }
 
