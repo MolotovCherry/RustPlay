@@ -52,6 +52,7 @@ pub fn custom_window_frame(
     };
 
     // Height of the title bar
+    const CAPT_TITLEBAR_HEIGHT: f32 = egui_dimens!(TITLEBAR_HEIGHT);
     const CAPT_WIDTH_CLOSE: f32 = egui_dimens!(CAPTION_WIDTH_CLOSE);
     const CAPT_WIDTH_MAXRESTORE: f32 = egui_dimens!(CAPTION_WIDTH_MAXRESTORE);
     const CAPT_WIDTH_MINIMIZE: f32 = egui_dimens!(CAPTION_WIDTH_MINIMIZE);
@@ -107,7 +108,7 @@ pub fn custom_window_frame(
     let title_bar_rect = {
         let mut rect = rect;
         rect.set_right(minimize_rect.left() + CAPT_PAD);
-        rect.set_bottom(capt_height);
+        rect.set_bottom(CAPT_TITLEBAR_HEIGHT);
         rect
     };
     let title_bar_response = ui.interact(title_bar_rect, Id::new("title_bar"), Sense::click());
