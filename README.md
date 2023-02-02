@@ -17,6 +17,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Windows support
 - Faster than play.rust-lang.org, and can use any dependencies you want with zero restrictions
 - Color support in terminal
+- Supports cargo's building progress bar!
 - Nice titlebar with tabs integrated into decoration WITH windows acrylic support (win11 only)
 - Multiple tabs
 - Can play scratches (very basic functionality currently)
