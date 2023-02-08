@@ -32,7 +32,7 @@ I am also the author of an IntelliJ rust scratch plugin, but it was too cumberso
 - Theming with config
 - Linux Support
 - Rename / save / upload to play.rust-lang.org (gist creation functionality is already done)
-- Project options window to configure every aspect of the rust scratch build. Will support nearly all optionsthat the website supports!
+- Project options window to configure every aspect of the rust scratch build. Will support nearly all options that the website supports!
 - Possible redesign of terminal window (not sure what to do yet)
 - Fix caption buttons to clip ui instead of overlay
 - Clearing terminal screen
